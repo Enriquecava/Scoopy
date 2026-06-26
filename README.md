@@ -93,7 +93,7 @@ npx tsc
 Run the scraper with an ASIN as argument:
 
 ```bash
-node dist/function/main.js B08XYZ1234
+node dist/function/productProcessor.js B08XYZ1234
 ```
 
 The ASIN is passed as the first CLI argument and is used to search the product and store the result.
