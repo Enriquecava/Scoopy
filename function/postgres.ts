@@ -18,6 +18,16 @@ export interface UpsertPriceInput {
   observedAt?: Date;
 }
 
+export async function getProducts(): Promise<string[]> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query<{ asin: string }>('SELECT asin FROM products');
+    return result.rows.map((row) => row.asin);
+  } finally {
+    client.release();
+  }
+}
+
 export async function upsertProductPrice(input: UpsertPriceInput): Promise<void> {
   const {
     asin,

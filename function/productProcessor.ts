@@ -5,14 +5,13 @@ import { CookiesPage } from '../page/cookiesPage';
 import { upsertProductPrice } from './postgres';
 import { parsePriceToEuros } from './common';
 
-async function main(asin: string) {
+export async function scrapeAndStoreProductPrice(asin: string): Promise<void> {
   if (!asin || asin.trim() === '') {
-    console.error('ASIN is required');
-    return;
+    throw new Error('ASIN is required');
   }
 
   const browser = await chromium.launch({
-    headless: false,
+    headless: true,
   });
 
   try {
@@ -35,14 +34,26 @@ async function main(asin: string) {
       currency: 'EUR',
     });
 
-    console.log(`Precio guardado para ${asin}: ${price} EUR`);
+    console.log(`Price saved for ${asin}: ${price} EUR`);
   } finally {
     await browser.close();
   }
 }
 
-main(process.argv[2]).catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+async function runFromCli(asin?: string): Promise<void> {
+  const targetAsin = asin ?? process.argv[2];
+
+  if (!targetAsin || targetAsin.trim() === '') {
+    throw new Error('ASIN is required');
+  }
+
+  await scrapeAndStoreProductPrice(targetAsin);
+}
+
+if (require.main === module) {
+  runFromCli().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
 
