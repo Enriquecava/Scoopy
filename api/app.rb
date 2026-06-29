@@ -7,7 +7,7 @@ require_relative "lib/swagger_docs"
 require_relative "routes/products"
 
 configure do
-  set :port, ENV.fetch("PORT", 4567)
+  set :port, ENV.fetch("PORT", 8000)
   set :show_exceptions, false
 end
 

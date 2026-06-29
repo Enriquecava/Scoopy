@@ -12,20 +12,10 @@ module Api
         },
         servers: [
           {
-            url: "http://localhost:4567"
+            url: "http://localhost:8000"
           }
         ],
         paths: {
-          "/health": {
-            get: {
-              summary: "Health check",
-              responses: {
-                "200" => {
-                  description: "Service is healthy"
-                }
-              }
-            }
-          },
           "/products": {
             get: {
               summary: "List products",
@@ -92,6 +82,25 @@ module Api
               ],
               responses: {
                 "200" => { description: "Product deleted" },
+                "400" => { description: "Invalid ASIN" },
+                "404" => { description: "Product not found" },
+                "500" => { description: "Internal server error" }
+              }
+            }
+          },
+          "/products/{asin}/price-history": {
+            get: {
+              summary: "Get the price history of a product",
+              parameters: [
+                {
+                  name: "asin",
+                  in: "path",
+                  required: true,
+                  schema: { type: "string" }
+                }
+              ],
+              responses: {
+                "200" => { description: "Product found" },
                 "400" => { description: "Invalid ASIN" },
                 "404" => { description: "Product not found" },
                 "500" => { description: "Internal server error" }
