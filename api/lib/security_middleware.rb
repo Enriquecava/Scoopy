@@ -14,7 +14,8 @@ module Api
       "http://127.0.0.1:3000",
       "http://localhost:9292",
       "http://127.0.0.1:9292",
-      "http://127.0.0.1:4567"
+      "http://127.0.0.1:4567",
+      "http://127.0.0.1:8000",
       # "https://frontend.com"
     ].freeze
 

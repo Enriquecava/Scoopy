@@ -153,6 +153,46 @@ module Routes
       end
     end
 
+    get "/products/:asin/price-history" do
+      asin = params[:asin]
+      unless Api::Validators.valid_asin?(asin)
+        status 400
+        Api::AppLogger.warn(event:"asin_validation",message: "Invalid ASIN provided", asin: asin, request_id: env["request_id"], service:"price_history")
+        return { error: "Invalid ASIN" }.to_json
+      end
+
+      Api::AppLogger.info(event:"get_price_history", message:"Fetching price history for product", asin: asin, request_id: env["request_id"], service:"price_history")
+
+      if self.class.db.nil?
+        status 500
+        Api::AppLogger.error(event:"DB_CONNECTION", message:"Database connection is not available", request_id: env["request_id"], service:"price_history")
+        return { error: "Internal server error" }.to_json
+      end
+      checkAsin = self.class.db.exec_params(
+        "SELECT asin,product_name FROM products WHERE asin = $1",
+        [asin]
+      )
+      if checkAsin.ntuples.zero?
+        not_found_response
+      else
+        result = self.class.db.exec_params(
+          "SELECT price, observed_at FROM price_history WHERE product_asin = $1 ORDER BY observed_at DESC",
+          [asin]
+        )
+        if result.ntuples.zero?
+          status 200
+          Api::AppLogger.info(event:"no_price_history_for_product", message:"Product has no price history", asin: params[:asin], request_id: env["request_id"], service:"price_history")
+          { error: "Product has no price history" }.to_json
+        else
+          Api::AppLogger.info(event:"price_history_fetched", message:"Price history fetched successfully", asin: asin, request_id: env["request_id"], service:"price_history", payload: result.map { |row| { price: row["price"], recorded_at: row["recorded_at"] } }.to_json)
+          {
+            asin:asin,
+            price_history: result.map { |row| { price: row["price"], time: row["observed_at"] } }
+          }.to_json
+        end
+      end
+    end
+
     private
 
     def not_found_response
