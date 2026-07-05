@@ -31,7 +31,7 @@ Scoopy/
 ├── assets/
 │   └── logo.png
 ├── scrapper/   # Amazon web scraper and price collection logic
-├── api/        # REST APIs for accessing stored data
+├── scoopy-api/        # REST APIs for accessing stored data
 └── README.md
 ```
 
