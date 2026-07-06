@@ -8,3 +8,26 @@ node_modules/
 /playwright/.auth/
 .env
 /api/log/
+
+# Rails / Ruby
+/scoopy-api/log/
+/scoopy-api/tmp/
+/scoopy-api/tmp/*
+!scoopy-api/tmp/.keep
+/scoopy-api/tmp/cache/
+/scoopy-api/tmp/cache/*
+/scoopy-api/tmp/cache/bootsnap/
+/scoopy-api/tmp/cache/bootsnap/*
+/vendor/bundle
+
+# Environment
+.env
+.env.*
+
+# Node
+/scrapper/node_modules/
+
+# OS / misc
+.DS_Store
+/.bundle
+

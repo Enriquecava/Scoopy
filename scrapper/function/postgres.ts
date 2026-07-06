@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import 'dotenv/config';
+import { UUID } from 'crypto';
 
 const pool = new Pool({
   host: process.env.PGHOST,
@@ -11,18 +12,32 @@ const pool = new Pool({
 });
 
 export interface UpsertPriceInput {
-  asin: string;
-  productName: string;
+  provider_id: bigint;
+  product_id: UUID;
   price: number;
-  currency?: string;
-  observedAt?: Date;
+  currency: string;
+  updated_at?: Date;
+  created_at?: Date;
 }
 
-export async function getProducts(): Promise<string[]> {
+export async function getProducts(): Promise<{ ssn: string, provider_id: bigint, product_id: UUID }[]> {
   const client = await pool.connect();
   try {
-    const result = await client.query<{ asin: string }>('SELECT asin FROM products');
-    return result.rows.map((row) => row.asin);
+    const result = await client.query<{ ssn: string, provider_id: bigint, product_id: UUID }>('SELECT ssn, provider_id, product_id FROM providers_products');
+    return result.rows;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getProductsBySSN(ssn: string): Promise<{ ssn: string, provider_id: bigint, product_id: UUID } | null> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query<{ ssn: string, provider_id: bigint, product_id: UUID }>(
+      'SELECT ssn, provider_id, product_id FROM providers_products WHERE ssn = $1',
+      [ssn]
+    );
+    return result.rows[0] || null;
   } finally {
     client.release();
   }
@@ -30,11 +45,12 @@ export async function getProducts(): Promise<string[]> {
 
 export async function upsertProductPrice(input: UpsertPriceInput): Promise<void> {
   const {
-    asin,
-    productName,
+    provider_id,
+    product_id,
     price,
     currency = 'EUR',
-    observedAt = new Date(),
+    updated_at = new Date(),
+    created_at = new Date(),
   } = input;
 
   const client = await pool.connect();
@@ -43,16 +59,9 @@ export async function upsertProductPrice(input: UpsertPriceInput): Promise<void>
     await client.query('BEGIN');
 
     await client.query(
-      `INSERT INTO products (asin, product_name)
-       VALUES ($1, $2)
-       ON CONFLICT (asin) DO NOTHING`,
-      [asin, productName || asin]
-    );
-
-    await client.query(
-      `INSERT INTO price_history (product_asin, price, currency, observed_at)
-       VALUES ($1, $2, $3, $4)`,
-      [asin, price, currency, observedAt]
+      `INSERT INTO price_histories (providers_id, product_id, price, currency, updated_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [provider_id, product_id, price, currency, updated_at, created_at]
     );
 
     await client.query('COMMIT');

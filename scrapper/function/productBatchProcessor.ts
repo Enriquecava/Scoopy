@@ -1,14 +1,21 @@
 import { scrapeAndStoreProductPrice } from './productProcessor';
-import { getProducts } from './postgres';
+import { getProducts, upsertProductPrice } from './postgres';
 
 export async function processProductsFromDatabase(): Promise<void> {
   const result = await getProducts();
 
-  for (const asin of result) {
+  for (const { ssn, provider_id, product_id } of result) {
     try {
-      await scrapeAndStoreProductPrice(asin);
+      const price = await scrapeAndStoreProductPrice(ssn);   
+      await upsertProductPrice({
+        provider_id,
+        product_id,
+        price,
+        currency: 'EUR',
+      });
+      console.log(`Price saved for ${ssn}: ${price} EUR`);
     } catch (error) {
-      console.error(`Error processing ${asin}:`, error);
+      console.error(`Error processing ${ssn}:`, error);
     }
   }
 }
