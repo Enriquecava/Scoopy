@@ -1,12 +1,12 @@
 import { getProductsBySSN, upsertProductPrice } from './postgres';
-import { amazonScrapper } from '../providers/amazon';
+import { amazonScraper } from '../providers/amazon';
 import { ScraperFn } from '../utils/types';
 import { Browser, chromium } from '@playwright/test';
 
 const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
 
-const scrappers: Record<number, ScraperFn> = {
-  1: amazonScrapper,
+const scrapers: Record<number, ScraperFn> = {
+  1: amazonScraper,
 };
 
 export async function scrapeAndStoreProductPrice(
@@ -18,8 +18,11 @@ export async function scrapeAndStoreProductPrice(
     throw new Error('ASIN is required');
   }
   const context = await browser.newContext();
-  const scrapper = scrappers[provider_id];
-  return scrapper({ context: context, productId: asin });
+  const scraper = scrapers[provider_id];
+  if (!scraper) {
+    throw new Error(`Unsupported provider_id: ${provider_id}`);
+  }
+  return scraper({ context: context, productId: asin });
 }
 
 async function runFromCli(asin?: string): Promise<void> {
@@ -48,7 +51,7 @@ async function runFromCli(asin?: string): Promise<void> {
     currency: 'EUR',
   });
   console.log(`Price saved for ${products.ssn}: ${price} EUR`);
-  
+
   await browser.close()
 }
 

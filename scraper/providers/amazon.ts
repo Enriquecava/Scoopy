@@ -1,11 +1,10 @@
-import { chromium } from '@playwright/test';
 import { parsePriceToEuros } from '../function/common';
 import { CookiesPage } from '../page/amazon/cookiesPage';
 import { HomePage } from '../page/amazon/homePage';
 import { SearchListPage } from '../page/amazon/searchListPage';
 import { ScraperFn } from '../utils/types';
 
-export const amazonScrapper: ScraperFn = async ({context,productId }) => {
+export const amazonScraper: ScraperFn = async ({context,productId }) => {
 
   try {
     const page = await context.newPage();

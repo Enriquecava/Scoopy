@@ -22,10 +22,8 @@ export async function processProductsFromDatabase(): Promise<void> {
     } catch (error) {
       console.error(`Error processing ${ssn}:`, error);
     }
-    finally{
-      await browser.close()
-    }
   }
+  await browser.close();
 }
 
 if (require.main === module) {
