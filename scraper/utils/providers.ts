@@ -1,0 +1,1 @@
+export const AMAZON_PROVIDER_ID:number = 1;
