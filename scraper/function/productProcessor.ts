@@ -39,21 +39,23 @@ async function runFromCli(asin?: string): Promise<void> {
   }
   const browser = await chromium.launch({ headless: headless });
 
-  const price = await scrapeAndStoreProductPrice(
-    browser,
-    products.ssn,
-    products.provider_id,
-  );
-  
-  await upsertProductPrice({
-    provider_id: products.provider_id,
-    product_id: products.product_id,
-    price,
-    currency: 'EUR',
-  });
-  console.log(`Price saved for ${products.ssn}: ${price} EUR`);
-
-  await browser.close()
+  try{
+    const price = await scrapeAndStoreProductPrice(
+      browser,
+      products.ssn,
+      products.provider_id,
+    );
+    
+    await upsertProductPrice({
+      provider_id: products.provider_id,
+      product_id: products.product_id,
+      price,
+      currency: 'EUR',
+    });
+    console.log(`Price saved for ${products.ssn}: ${price} EUR`);
+  } finally{
+    await browser.close()
+  }
 }
 
 if (require.main === module) {
