@@ -24,7 +24,7 @@ export class HomePage {
     await this.searchButton.click()
   }
 
-  async searchForAsing(asin:string){
+  async searchForAsin(asin:string){
     await this.clickSearchBar()
     await this.typeSearch(asin)
     await this.clickSearchButton()

@@ -5,13 +5,10 @@ import { HomePage } from '../page/amazon/homePage';
 import { SearchListPage } from '../page/amazon/searchListPage';
 import { ScraperFn } from '../utils/types';
 
-const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
-
-export const amazonScrapper: ScraperFn = async ({productId }) => {
-  const browser = await chromium.launch({ headless: headless });
+export const amazonScrapper: ScraperFn = async ({context,productId }) => {
 
   try {
-    const page = await browser.newPage();
+    const page = await context.newPage();
     await page.goto('https://www.amazon.es/');
 
     const homePage = new HomePage(page);
@@ -19,11 +16,11 @@ export const amazonScrapper: ScraperFn = async ({productId }) => {
     const cookiesPage = new CookiesPage(page);
 
     await cookiesPage.clickAcceptButton();
-    await homePage.searchForAsing(productId);
+    await homePage.searchForAsin(productId);
 
     const rawPrice = await searchListPage.priceItem(productId);
     return parsePriceToEuros(rawPrice);
   } finally {
-    await browser.close();
+    await context.close();
   }
 };

@@ -62,6 +62,7 @@ export async function getProductsBySSN(ssn: string): Promise<{
       product_id
     FROM providers_products
     WHERE ssn = $1
+    LIMIT 1;
     `,
       [ssn],
     );

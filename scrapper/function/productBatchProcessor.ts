@@ -1,12 +1,17 @@
 import { scrapeAndStoreProductPrice } from './productProcessor';
 import { getProducts, upsertProductPrice } from './postgres';
+import { chromium } from '@playwright/test';
+
+const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
+
 
 export async function processProductsFromDatabase(): Promise<void> {
   const result = await getProducts();
+  const browser = await chromium.launch({ headless: headless });
 
   for (const { ssn, provider_id, product_id } of result) {
     try {
-      const price = await scrapeAndStoreProductPrice(ssn,provider_id);   
+      const price = await scrapeAndStoreProductPrice(browser,ssn,provider_id);   
       await upsertProductPrice({
         provider_id,
         product_id,
@@ -16,6 +21,9 @@ export async function processProductsFromDatabase(): Promise<void> {
       console.log(`Price saved for ${ssn}: ${price} EUR`);
     } catch (error) {
       console.error(`Error processing ${ssn}:`, error);
+    }
+    finally{
+      await browser.close()
     }
   }
 }
