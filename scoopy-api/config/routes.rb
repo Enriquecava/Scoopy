@@ -1,6 +1,10 @@
 Rails.application.routes.draw do
-  devise_for :users
-  resources :products do
+  devise_for :users,
+           defaults: { format: :json },
+           controllers: {
+             sessions: "users/sessions"
+           }
+  resources :products, defaults: { format: :json }  do
     member do
       get :price_history
     end
