@@ -12,7 +12,7 @@ const pool = new Pool({
 });
 
 export interface UpsertPriceInput {
-  provider_id: bigint;
+  provider_id: number;
   product_id: UUID;
   price: number;
   currency: string;
@@ -23,20 +23,18 @@ export interface UpsertPriceInput {
 export async function getProducts(): Promise<
   {
     ssn: string;
-    provider_id: bigint;
+    provider_id: number;
     product_id: UUID;
-    provider_name: string;
   }[]
 > {
   const client = await pool.connect();
   try {
     const result = await client.query<{
       ssn: string;
-      provider_id: bigint;
+      provider_id: number;
       product_id: UUID;
-      provider_name: string;
     }>(
-      'SELECT pp.ssn, pp.provider_id, pp.product_id, p.name AS provider_name FROM providers_products pp INNER JOIN providers p ON p.id = pp.provider_id',
+      'SELECT ssn, provider_id, product_id FROM providers_products',
     );
     return result.rows;
   } finally {
@@ -46,29 +44,24 @@ export async function getProducts(): Promise<
 
 export async function getProductsBySSN(ssn: string): Promise<{
   ssn: string;
-  provider_id: bigint;
+  provider_id: number;
   product_id: UUID;
-  provider_name: string;
 } | null> {
   const client = await pool.connect();
 
   try {
     const result = await client.query<{
       ssn: string;
-      provider_id: bigint;
+      provider_id: number;
       product_id: UUID;
-      provider_name: string;
     }>(
       `
     SELECT 
-      pp.ssn,
-      pp.provider_id,
-      pp.product_id,
-      p.name AS provider_name
-    FROM providers_products pp
-    INNER JOIN providers p 
-      ON p.id = pp.provider_id
-    WHERE pp.ssn = $1
+      ssn,
+      provider_id,
+      product_id
+    FROM providers_products
+    WHERE ssn = $1
     `,
       [ssn],
     );

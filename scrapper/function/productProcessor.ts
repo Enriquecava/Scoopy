@@ -1,16 +1,16 @@
 import { getProductsBySSN, upsertProductPrice } from './postgres';
 import { amazonScrapper } from '../providers/amazon';
-import { Provider, ScraperFn } from '../utils/types';
+import { ScraperFn } from '../utils/types';
 
-const scrappers: Record<Provider, ScraperFn> = {
-  amazon: amazonScrapper,
+const scrappers: Record<number, ScraperFn> = {
+  1: amazonScrapper,
 };
 
-export async function scrapeAndStoreProductPrice(asin: string, provider: string): Promise<number> {
+export async function scrapeAndStoreProductPrice(asin: string, provider_id: number): Promise<number> {
   if (!asin || asin.trim() === '') {
     throw new Error('ASIN is required');
   }
-  const scrapper = scrappers[provider];
+  const scrapper = scrappers[provider_id];
   return scrapper({productId: asin });
 
 
@@ -24,7 +24,7 @@ async function runFromCli(asin?: string): Promise<void> {
   }
   const products = await getProductsBySSN(targetAsin);
 
-  const price =await scrapeAndStoreProductPrice(products.ssn,products.provider_name);
+  const price =await scrapeAndStoreProductPrice(products.ssn,products.provider_id);
 
   await upsertProductPrice({
     provider_id: products.provider_id,
