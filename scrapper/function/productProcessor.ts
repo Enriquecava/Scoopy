@@ -16,24 +16,27 @@ export async function scrapeAndStoreProductPrice(asin: string, provider_id: numb
 
 }
 
-async function runFromCli(asin?: string): Promise<void> {
-  const targetAsin = asin ?? process.argv[2];
+  async function runFromCli(asin?: string): Promise<void> {
+    const targetAsin = asin ?? process.argv[2];
 
-  if (!targetAsin || targetAsin.trim() === '') {
-    throw new Error('ASIN is required');
+    if (!targetAsin || targetAsin.trim() === '') {
+      throw new Error('ASIN is required');
+    }
+    const products = await getProductsBySSN(targetAsin);
+    if (!products) {
+      throw new Error(`No product found for SSN/ASIN: ${targetAsin}`);
+    }
+
+    const price =await scrapeAndStoreProductPrice(products.ssn,products.provider_id);
+
+    await upsertProductPrice({
+      provider_id: products.provider_id,
+      product_id: products.product_id,
+      price,
+      currency: 'EUR',
+    });
+    console.log(`Price saved for ${products.ssn}: ${price} EUR`);
   }
-  const products = await getProductsBySSN(targetAsin);
-
-  const price =await scrapeAndStoreProductPrice(products.ssn,products.provider_id);
-
-  await upsertProductPrice({
-    provider_id: products.provider_id,
-    product_id: products.product_id,
-    price,
-    currency: 'EUR',
-  });
-  console.log(`Price saved for ${products.ssn}: ${price} EUR`);
-}
 
 if (require.main === module) {
   runFromCli().catch((error) => {
