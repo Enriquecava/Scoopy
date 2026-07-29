@@ -4,9 +4,9 @@ import { getProducts, upsertProductPrice } from './postgres';
 export async function processProductsFromDatabase(): Promise<void> {
   const result = await getProducts();
 
-  for (const { ssn, provider_id, product_id } of result) {
+  for (const { ssn, provider_id, product_id , provider_name} of result) {
     try {
-      const price = await scrapeAndStoreProductPrice(ssn);   
+      const price = await scrapeAndStoreProductPrice(ssn,provider_name);   
       await upsertProductPrice({
         provider_id,
         product_id,

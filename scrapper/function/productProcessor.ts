@@ -1,37 +1,26 @@
-import { chromium } from '@playwright/test';
-import { HomePage } from '../page/homePage';
-import { SearchListPage } from '../page/searchListPage';
-import { CookiesPage } from '../page/cookiesPage';
 import { getProductsBySSN, upsertProductPrice } from './postgres';
-import { parsePriceToEuros } from './common';
+import { amazonScrapper } from '../providers/amazon';
 
-export async function scrapeAndStoreProductPrice(asin: string): Promise<number> {
+export type Provider = 'amazon'
+
+export type ScraperInput = {
+  productId: string; // asin, sku, ean...
+};
+
+export type ScraperFn = (input: ScraperInput) => Promise<number>;
+
+const scrappers: Record<Provider, ScraperFn> = {
+  amazon: amazonScrapper,
+};
+
+export async function scrapeAndStoreProductPrice(asin: string, provider: string): Promise<number> {
   if (!asin || asin.trim() === '') {
     throw new Error('ASIN is required');
   }
+  const scrapper = scrappers[provider];
+  return scrapper({productId: asin });
 
-  const browser = await chromium.launch({
-    headless: true,
-  });
 
-  try {
-    const page = await browser.newPage();
-    await page.goto('https://www.amazon.es/');
-
-    const homePage = new HomePage(page);
-    const searchListPage = new SearchListPage(page);
-    const cookiesPage = new CookiesPage(page);
-    await cookiesPage.clickAcceptButton();
-    await homePage.searchForAsing(asin);
-
-    const rawPrice = await searchListPage.priceItem(asin);
-    const price = parsePriceToEuros(rawPrice);
-    console.log('Price for ASIN', asin, ':', price, 'EUR');
-    return price
-
-  } finally {
-    await browser.close();
-  }
 }
 
 async function runFromCli(asin?: string): Promise<void> {
@@ -42,7 +31,7 @@ async function runFromCli(asin?: string): Promise<void> {
   }
   const products = await getProductsBySSN(targetAsin);
 
-  const price =await scrapeAndStoreProductPrice(products.ssn);
+  const price =await scrapeAndStoreProductPrice(products.ssn,products.provider_name);
 
   await upsertProductPrice({
     provider_id: products.provider_id,
