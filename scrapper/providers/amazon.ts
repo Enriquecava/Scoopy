@@ -3,8 +3,10 @@ import { parsePriceToEuros } from '../function/common';
 import { CookiesPage } from '../page/amazon/cookiesPage';
 import { HomePage } from '../page/amazon/homePage';
 import { SearchListPage } from '../page/amazon/searchListPage';
-import type { ScraperFn } from '../function/productProcessor';
+import { ScraperFn } from '../utils/types';
+
 const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
+
 export const amazonScrapper: ScraperFn = async ({productId }) => {
   const browser = await chromium.launch({ headless: headless });
 

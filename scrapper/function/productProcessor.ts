@@ -1,13 +1,6 @@
 import { getProductsBySSN, upsertProductPrice } from './postgres';
 import { amazonScrapper } from '../providers/amazon';
-
-export type Provider = 'amazon'
-
-export type ScraperInput = {
-  productId: string; // asin, sku, ean...
-};
-
-export type ScraperFn = (input: ScraperInput) => Promise<number>;
+import { Provider, ScraperFn } from '../utils/types';
 
 const scrappers: Record<Provider, ScraperFn> = {
   amazon: amazonScrapper,
