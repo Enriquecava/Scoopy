@@ -1,5 +1,4 @@
 import { Page, Locator } from '@playwright/test';
-import { normalizePriceText } from '../function/common';
 
 export class SearchListPage {
   private page: Page;

@@ -25,7 +25,7 @@ node_modules/
 .env.*
 
 # Node
-/scrapper/node_modules/
+/scraper/node_modules/
 
 # OS / misc
 .DS_Store

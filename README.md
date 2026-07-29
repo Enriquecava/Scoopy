@@ -30,7 +30,7 @@ The main goal of this project is to collect historical price data, store it, and
 Scoopy/
 ├── assets/
 │   └── logo.png
-├── scrapper/   # Amazon web scraper and price collection logic
+├── scraper/   # Amazon web scraper and price collection logic
 ├── scoopy-api/        # REST APIs for accessing stored data
 └── README.md
 ```
@@ -39,7 +39,7 @@ Scoopy/
 
 ```mermaid
 flowchart LR
-    A[Amazon Website] --> B[Scrapper]
+    A[Amazon Website] --> B[Scraper]
     B --> C[(Database)]
     C --> D[API]
     D --> E[Frontend Application]
