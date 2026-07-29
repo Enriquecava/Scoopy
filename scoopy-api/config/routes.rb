@@ -2,7 +2,8 @@ Rails.application.routes.draw do
   devise_for :users,
            defaults: { format: :json },
            controllers: {
-             sessions: "users/sessions"
+             sessions: "users/sessions",
+             registrations: "users/registrations"
            }
   resources :products, defaults: { format: :json }  do
     member do
