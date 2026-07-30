@@ -2,12 +2,14 @@ import { getProductsBySSN, upsertProductPrice } from './postgres';
 import { amazonScraper } from '../providers/amazon';
 import { ScraperFn } from '../utils/types';
 import { Browser, chromium } from '@playwright/test';
-import {AMAZON_PROVIDER_ID} from '../utils/providers';
+import {AMAZON_PROVIDER_ID,CARREFOUR_PROVIDER_ID} from '../utils/providers';
+import { carrefourScraper } from '../providers/carrefour';
 
 const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
 
 const scrapers: Record<number, ScraperFn> = {
   [AMAZON_PROVIDER_ID]: amazonScraper,
+  [CARREFOUR_PROVIDER_ID]: carrefourScraper
 };
 
 export async function scrapeAndStoreProductPrice(
@@ -22,7 +24,18 @@ export async function scrapeAndStoreProductPrice(
   if (!scraper) {
     throw new Error(`Unsupported provider_id: ${provider_id}`);
   }
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    extraHTTPHeaders: {
+      'Accept-Language': 'es-ES,es;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    }
+  });
+  await context.addInitScript(()=>{
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => false,
+    })
+  })
   return scraper({ context: context, productId: asin });
 }
 
@@ -37,7 +50,12 @@ async function runFromCli(asin?: string): Promise<void> {
   if (!products) {
     throw new Error(`No product found for SSN/ASIN: ${targetAsin}`);
   }
-  const browser = await chromium.launch({ headless: headless });
+  const browser = await chromium.launch({ headless: headless,
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-extensions',
+    ],
+  });
 
   try{
     const price = await scrapeAndStoreProductPrice(
