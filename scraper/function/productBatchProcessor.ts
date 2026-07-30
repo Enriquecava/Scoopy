@@ -6,7 +6,12 @@ const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
 
 export async function processProductsFromDatabase(): Promise<void> {
   const result = await getProducts();
-  const browser = await chromium.launch({ headless: headless });
+  const browser = await chromium.launch({ headless: headless,
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-extensions',
+    ],
+   });
 
   try {
     for (const { ssn, provider_id, product_id } of result) {
