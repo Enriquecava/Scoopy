@@ -4,7 +4,7 @@ import { ScraperFn } from '../utils/types';
 import { Browser, chromium } from '@playwright/test';
 import {AMAZON_PROVIDER_ID,CARREFOUR_PROVIDER_ID} from '../utils/providers';
 import { carrefourScraper } from '../providers/carrefour';
-import { LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
+import { closeLogger, LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
 
 const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
 
@@ -91,6 +91,9 @@ async function runFromCli(asin?: string): Promise<void> {
 if (require.main === module) {
   runFromCli().catch((error) => {
     logger.error({ event: LOG_EVENT.CLI_RUN_FAILED, error: normalizeLogError(error) }, 'CLI execution failed');
+    closeLogger();
     process.exitCode = 1;
+  }).finally(() => {
+    closeLogger();
   });
 }

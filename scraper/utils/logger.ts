@@ -31,9 +31,22 @@ export function normalizeLogError(error: unknown): Record<string, unknown> {
 }
 
 const scraperRoot = path.resolve(__dirname, '..');
-const logFilePath = process.env.SCRAPER_LOG_FILE ?? path.join(scraperRoot, 'logs', 'scraper-info.log');
+const configuredLogFile = process.env.SCRAPER_LOG_FILE;
+const logFilePath = configuredLogFile
+  ? path.resolve(configuredLogFile)
+  : undefined;
 
-fs.mkdirSync(path.dirname(logFilePath), { recursive: true });
+if (logFilePath) {
+  fs.mkdirSync(path.dirname(logFilePath), { recursive: true });
+}
+
+const transport = logFilePath
+  ? pino.destination({
+      dest: logFilePath,
+      mkdir: true,
+      sync: false,
+    })
+  : undefined;
 
 export const logger = pino(
   {
@@ -41,11 +54,31 @@ export const logger = pino(
       service: 'scoopy-scraper',
     },
     timestamp: pino.stdTimeFunctions.isoTime,
-    redact: ['password', 'token', 'cookie', 'authorization', 'req.headers.authorization'],
+    redact: [
+      'password',
+      'token',
+      'cookie',
+      'authorization',
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'headers.authorization',
+      'headers.cookie',
+    ],
   },
-  pino.destination({
-    dest: logFilePath,
-    mkdir: true,
-    sync: false,
-  }),
+  transport,
 );
+
+export function flushLogger(): void {
+  if (transport && typeof (transport as { flushSync?: () => void }).flushSync === 'function') {
+    (transport as { flushSync: () => void }).flushSync();
+  }
+}
+
+export function closeLogger(): void {
+  if (transport && typeof (transport as { flushSync?: () => void }).flushSync === 'function') {
+    (transport as { flushSync: () => void }).flushSync();
+  }
+  if (typeof (logger as { flush?: () => void }).flush === 'function') {
+    (logger as { flush: () => void }).flush();
+  }
+}

@@ -1,7 +1,7 @@
 import { scrapeAndStoreProductPrice } from './productProcessor';
 import { getProducts, upsertProductPrice } from './postgres';
 import { chromium } from '@playwright/test';
-import { LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
+import { closeLogger, LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
 
 const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
 
@@ -54,6 +54,9 @@ export async function processProductsFromDatabase(): Promise<void> {
 if (require.main === module) {
   processProductsFromDatabase().catch((error) => {
     logger.error({ event: LOG_EVENT.BATCH_PROCESSING_FAILED, error: normalizeLogError(error) }, 'Batch processing failed');
+    closeLogger();
     process.exitCode = 1;
+  }).finally(() => {
+    closeLogger();
   });
 }
