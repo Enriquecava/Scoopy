@@ -1,7 +1,7 @@
 import { scrapeAndStoreProductPrice } from './productProcessor';
 import { getProducts, upsertProductPrice } from './postgres';
 import { chromium } from '@playwright/test';
-import { logger } from '../utils/logger';
+import { LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
 
 const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
 
@@ -29,7 +29,7 @@ export async function processProductsFromDatabase(): Promise<void> {
           currency: 'EUR',
         });
         logger.info({
-          event: 'product_price_saved',
+          event: LOG_EVENT.PRODUCT_PRICE_SAVED,
           asin: ssn,
           provider_id: Number(provider_id),
           product_id,
@@ -38,10 +38,11 @@ export async function processProductsFromDatabase(): Promise<void> {
         }, 'Product price saved');
       } catch (error) {
         logger.error({
-          event: 'product_processing_failed',
+          event: LOG_EVENT.PRODUCT_PROCESSING_FAILED,
           asin: ssn,
-          provider_id,
+          provider_id: Number(provider_id),
           product_id,
+          error: normalizeLogError(error),
         }, 'Error processing product');
       }
     }
@@ -52,7 +53,7 @@ export async function processProductsFromDatabase(): Promise<void> {
 
 if (require.main === module) {
   processProductsFromDatabase().catch((error) => {
-    logger.error({ event: 'batch_processing_failed', error }, 'Batch processing failed');
+    logger.error({ event: LOG_EVENT.BATCH_PROCESSING_FAILED, error: normalizeLogError(error) }, 'Batch processing failed');
     process.exitCode = 1;
   });
 }
