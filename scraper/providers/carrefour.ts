@@ -1,13 +1,16 @@
 import { parsePriceToEuros } from '../function/common';
 import { CookiesPage } from '../page/carrefour/cookiesPage';
 import { SearchListPage } from '../page/carrefour/searchListPage';
+import { LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
 import { ScraperFn } from '../utils/types';
 import { HomePage } from '../page/carrefour/homePage';
 
 export const carrefourScraper: ScraperFn = async ({context,productId }) => {
   try{
+    logger.info({ event: LOG_EVENT.PROVIDER_SCRAPE_STARTED, provider: 'carrefour', productId }, 'Starting Carrefour scrape');
+
     const page = await context.newPage();
-    await page.goto(`https://www.carrefour.es/`); 
+    await page.goto(`https://www.carrefour.es/`);
     const homePage = new HomePage(page)
     const searchListPage = new SearchListPage(page)
     const cookiesPage = new CookiesPage(page)
@@ -21,9 +24,14 @@ export const carrefourScraper: ScraperFn = async ({context,productId }) => {
     await homePage.clickSearchButton()
 
     const rawPrice = await searchListPage.priceItem()
-    return parsePriceToEuros(rawPrice);
+    const price = parsePriceToEuros(rawPrice);
 
-
+    logger.info({ event: LOG_EVENT.PROVIDER_PRICE_OBTAINED, provider: 'carrefour', productId, price }, 'Price obtained from Carrefour');
+    return price;
+  }
+  catch (error) {
+    logger.error({ event: LOG_EVENT.PROVIDER_SCRAPE_FAILED, provider: 'carrefour', productId, error: normalizeLogError(error) }, 'Carrefour scrape failed');
+    throw error;
   }
   finally{
     await context.close()

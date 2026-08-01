@@ -8,6 +8,7 @@ node_modules/
 /playwright/.auth/
 .env
 /api/log/
+/scraper/logs
 
 # Rails / Ruby
 /scoopy-api/log/

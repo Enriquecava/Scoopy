@@ -4,6 +4,7 @@ import { ScraperFn } from '../utils/types';
 import { Browser, chromium } from '@playwright/test';
 import {AMAZON_PROVIDER_ID,CARREFOUR_PROVIDER_ID} from '../utils/providers';
 import { carrefourScraper } from '../providers/carrefour';
+import { closeLogger, LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
 
 const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
 
@@ -18,10 +19,12 @@ export async function scrapeAndStoreProductPrice(
   provider_id: number,
 ): Promise<number> {
   if (!asin || asin.trim() === '') {
+    logger.warn({ event: LOG_EVENT.INVALID_PRODUCT_INPUT, asin, provider_id }, 'ASIN is required');
     throw new Error('ASIN is required');
   }
   const scraper = scrapers[provider_id];
   if (!scraper) {
+    logger.error({ event: LOG_EVENT.UNSUPPORTED_PROVIDER, provider_id, asin }, 'Unsupported provider requested');
     throw new Error(`Unsupported provider_id: ${provider_id}`);
   }
   const context = await browser.newContext({
@@ -44,10 +47,12 @@ async function runFromCli(asin?: string): Promise<void> {
   const targetAsin = asin ?? process.argv[2];
 
   if (!targetAsin || targetAsin.trim() === '') {
+    logger.warn({ event: LOG_EVENT.INVALID_CLI_INPUT }, 'ASIN is required');
     throw new Error('ASIN is required');
   }
   const products = await getProductsBySSN(targetAsin);
   if (!products) {
+    logger.warn({ event: LOG_EVENT.PRODUCT_NOT_FOUND, asin: targetAsin }, 'No product found for SSN/ASIN');
     throw new Error(`No product found for SSN/ASIN: ${targetAsin}`);
   }
   const browser = await chromium.launch({ headless: headless,
@@ -70,7 +75,14 @@ async function runFromCli(asin?: string): Promise<void> {
       price,
       currency: 'EUR',
     });
-    console.log(`Price saved for ${products.ssn}: ${price} EUR`);
+    logger.info({
+      event: LOG_EVENT.PRODUCT_PRICE_SAVED,
+      asin: products.ssn,
+      provider_id: Number(products.provider_id),
+      product_id: products.product_id,
+      price,
+      currency: 'EUR',
+    }, 'Product price saved');
   } finally{
     await browser.close()
   }
@@ -78,7 +90,10 @@ async function runFromCli(asin?: string): Promise<void> {
 
 if (require.main === module) {
   runFromCli().catch((error) => {
-    console.error(error);
+    logger.error({ event: LOG_EVENT.CLI_RUN_FAILED, error: normalizeLogError(error) }, 'CLI execution failed');
+    closeLogger();
     process.exitCode = 1;
+  }).finally(() => {
+    closeLogger();
   });
 }

@@ -1,6 +1,9 @@
 {
   "name": "scoopy",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=26.5.0"
+  },
   "description": "",
   "main": "index.js",
   "scripts": {},
@@ -16,6 +19,7 @@
   "dependencies": {
     "@types/pg": "^8.20.0",
     "dotenv": "^17.4.2",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "pino": "^10.3.1"
   }
 }
