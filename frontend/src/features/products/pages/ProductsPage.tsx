@@ -83,7 +83,12 @@ export function ProductsPage() {
         products.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {products.map((product) => (
-              <article key={product.id} className="rounded-2xl border border-white/10 bg-slate-900/70 p-5 shadow-lg shadow-slate-950/20 transition hover:-translate-y-0.5 hover:border-cyan-500/30">
+              <button
+                key={product.id}
+                type="button"
+                onClick={() => navigate(`/products/${product.id}`)}
+                className="rounded-2xl border border-white/10 bg-slate-900/70 p-5 text-left shadow-lg shadow-slate-950/20 transition hover:-translate-y-0.5 hover:border-cyan-500/30"
+              >
                 <div className="flex items-center gap-3">
                   <div className="rounded-xl bg-cyan-500/10 p-2 text-cyan-400">
                     <PackageOpen className="h-5 w-5" />
@@ -93,7 +98,7 @@ export function ProductsPage() {
                     <p className="text-sm text-slate-400">{t('common.activeProduct')}</p>
                   </div>
                 </div>
-              </article>
+              </button>
             ))}
           </div>
         ) : (

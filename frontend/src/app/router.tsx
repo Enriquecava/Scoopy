@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { LoginPage } from '../features/auth/pages/LoginPage'
+import { ProductDetailPage } from '../features/products/pages/ProductDetailPage'
 import { ProductsPage } from '../features/products/pages/ProductsPage'
 import { MainLayout } from './layouts/MainLayout'
 import { useAuth } from './providers/AuthProvider'
@@ -9,7 +10,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
 
   if (isLoading) {
-    return <Navigate to="/login" replace />
+    return null
   }
 
   if (!isAuthenticated) {
@@ -29,6 +30,16 @@ export function AppRouter() {
           <ProtectedRoute>
             <MainLayout>
               <ProductsPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/products/:id"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <ProductDetailPage />
             </MainLayout>
           </ProtectedRoute>
         }
