@@ -3,14 +3,16 @@ import type { ReactNode } from 'react'
 import { LoginPage } from '../features/auth/pages/LoginPage'
 import { ProductDetailPage } from '../features/products/pages/ProductDetailPage'
 import { ProductsPage } from '../features/products/pages/ProductsPage'
+import { useTranslation } from '../shared/i18n'
 import { MainLayout } from './layouts/MainLayout'
 import { useAuth } from './providers/AuthProvider'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
+  const { t } = useTranslation()
 
   if (isLoading) {
-    return null
+    return <div className="p-4 text-sm text-slate-300">{t('common.loading')}</div>
   }
 
   if (!isAuthenticated) {
