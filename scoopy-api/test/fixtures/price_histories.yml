@@ -1,11 +1,11 @@
-# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
-
 one:
-  provider_references: MyText
   price: 9.99
-  product_id: MyText
+  currency: EUR
+  product: one
+  provider: one
 
 two:
-  provider_references: MyText
-  price: 9.99
-  product_id: MyText
+  price: 14.99
+  currency: EUR
+  product: two
+  provider: one

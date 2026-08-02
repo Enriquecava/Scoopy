@@ -1,52 +1,32 @@
 default: &default
   adapter: postgresql
   encoding: unicode
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  host: <%= ENV.fetch("PGHOST", "127.0.0.1") %>
+  port: <%= ENV.fetch("PGPORT", 5432) %>
+  username: <%= ENV.fetch("PGUSER", "postgres") %>
+  password: <%= ENV.fetch("PGPASSWORD", "postgres") %>
 
 development:
   <<: *default
-  host: 127.0.0.1
-  port: 5432
-  database: scoopy_development
-  username: postgres
-  password: postgres
+  database: <%= ENV.fetch("PGDATABASE", "scoopy_development") %>
 
 test:
   <<: *default
-  host: 127.0.0.1
-  port: 5432
-  database: scoopy_test
-  username: postgres
-  password: postgres
+  database: <%= ENV.fetch("PGDATABASE", "scoopy_test") %>
 
 production:
   <<: *default
-  host: <%= ENV.fetch("PGHOST") %>
-  port: <%= ENV.fetch("PGPORT") %>
-  database: <%= ENV.fetch("PGDATABASE") %>
-  username: <%= ENV.fetch("PGUSER") %>
-  password: <%= ENV.fetch("PGPASSWORD") %>
+  database: <%= ENV.fetch("PGDATABASE", "scoopy_production") %>
 
 queue:
   <<: *default
-  host: <%= ENV.fetch("PGHOST") %>
-  port: <%= ENV.fetch("PGPORT") %>
-  database: <%= ENV.fetch("PGDATABASE") %>
-  username: <%= ENV.fetch("PGUSER") %>
-  password: <%= ENV.fetch("PGPASSWORD") %>
+  database: <%= ENV.fetch("PGDATABASE", "scoopy_production") %>
 
 cache:
   <<: *default
-  host: <%= ENV.fetch("PGHOST") %>
-  port: <%= ENV.fetch("PGPORT") %>
-  database: <%= ENV.fetch("PGDATABASE") %>
-  username: <%= ENV.fetch("PGUSER") %>
-  password: <%= ENV.fetch("PGPASSWORD") %>
+  database: <%= ENV.fetch("PGDATABASE", "scoopy_production") %>
 
 cable:
   <<: *default
-  host: <%= ENV.fetch("PGHOST") %>
-  port: <%= ENV.fetch("PGPORT") %>
-  database: <%= ENV.fetch("PGDATABASE") %>
-  username: <%= ENV.fetch("PGUSER") %>
-  password: <%= ENV.fetch("PGPASSWORD") %>
+  database: <%= ENV.fetch("PGDATABASE", "scoopy_production") %>

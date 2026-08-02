@@ -9,8 +9,15 @@
 #   end
 return unless Rails.env.development?
 
-product = Product.create(name:'test')
-provider = Provider.create(name:'Amazon', url:'https://www.amazon.es')
-ProvidersProduct.create(product_id:product.id, provider_id:provider.id, ssn:'test123')
-PriceHistory.create(product_id:product.id, providers_id:provider.id, price: 10.0, currency: 'EUR')
-User.create!(email:'test@example.com',password:'123456')
+product = Product.find_or_create_by!(name: "test")
+provider = Provider.find_or_create_by!(name: "Amazon", url: "https://www.amazon.es")
+ProvidersProduct.find_or_create_by!(product: product, provider: provider) do |record|
+  record.ssn = "test123"
+end
+PriceHistory.find_or_create_by!(product: product, provider: provider) do |record|
+  record.price = 10.0
+  record.currency = "EUR"
+end
+User.find_or_create_by!(email: "test@example.com") do |user|
+  user.password = "123456"
+end

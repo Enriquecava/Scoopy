@@ -4,12 +4,11 @@ class Users::SessionsController < Devise::SessionsController
   private
 
   def respond_with(current_user, _opts = {})
+    token = request.env["warden-jwt_auth.token"]
+
     render json: {
-      user: {
-        id: current_user.id,
-        email: current_user.email
-      },
-      token: request.env["warden-jwt_auth.token"]
+      user: UserSerializer.render(current_user),
+      token: token
     }, status: :ok
   end
 

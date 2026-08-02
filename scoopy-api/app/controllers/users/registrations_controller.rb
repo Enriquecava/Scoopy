@@ -4,18 +4,19 @@ module Users
 
     protected
 
-    def sign_up(resource_name, resource)
+    def sign_up(_resource_name, resource)
+      resource
     end
 
     def respond_with(resource, _opts = {})
       if resource.persisted?
         render json: {
           message: "User created successfully",
-          user: resource
+          user: UserSerializer.render(resource)
         }, status: :created
       else
         render json: {
-          errors: resource.errors.full_messages
+          errors: ["Unable to create user"]
         }, status: :unprocessable_entity
       end
     end
