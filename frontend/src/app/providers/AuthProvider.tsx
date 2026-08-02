@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { apiClient } from '../../shared/api/client'
+import { getInitialLocale, translate } from '../../shared/i18n/provider'
 
 function normalizeToken(value: unknown): string | null {
   if (typeof value !== 'string') {
@@ -22,6 +23,24 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 const STORAGE_KEY = 'scoopy:token'
 
+function getAuthErrorMessage(error: unknown): string {
+  const response =
+    typeof error === 'object' && error !== null && 'response' in error
+      ? (error as { response?: { status?: number; data?: { error?: string; message?: string } } }).response
+      : undefined
+
+  if (response?.status === 401) {
+    return translate('auth.errors.invalidCredentials', getInitialLocale())
+  }
+
+  const backendMessage = response?.data?.error || response?.data?.message
+  if (typeof backendMessage === 'string' && backendMessage.trim()) {
+    return backendMessage
+  }
+
+  return translate('auth.errors.loginFailed', getInitialLocale())
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(STORAGE_KEY))
   const [isLoading, setIsLoading] = useState(false)
@@ -37,6 +56,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     delete apiClient.defaults.headers.common.Authorization
   }, [token])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const storedToken = sessionStorage.getItem(STORAGE_KEY)
+    if (storedToken) {
+      setToken(storedToken)
+    }
+  }, [])
 
   const login = async (email: string, password: string) => {
     setIsLoading(true)
@@ -70,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.setItem(STORAGE_KEY, normalizedToken)
       setToken(normalizedToken)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'No se pudo iniciar sesión.'
+      const message = getAuthErrorMessage(err)
       setError(message)
       throw err
     } finally {

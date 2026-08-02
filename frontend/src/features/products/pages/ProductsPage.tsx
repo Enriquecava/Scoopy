@@ -3,15 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { PackageOpen, Search, Sparkles } from 'lucide-react'
 import { apiClient } from '../../../shared/api/client'
 import { useAuth } from '../../../app/providers/AuthProvider'
+import { useTranslation } from '../../../shared/i18n'
 
 type Product = {
-  id: number
+  id: string | number
   name: string
 }
 
 export function ProductsPage() {
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
+  const { t } = useTranslation()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -42,7 +44,7 @@ export function ProductsPage() {
           }
 
           const candidate = item as Partial<Product>
-          return typeof candidate.id === 'number' && typeof candidate.name === 'string'
+          return typeof candidate.id === 'string' || typeof candidate.id === 'number' && typeof candidate.name === 'string'
         })
 
         setProducts(cleanedProducts)
@@ -60,19 +62,19 @@ export function ProductsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-lg shadow-slate-950/30 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.35em] text-cyan-400">Productos</p>
-          <h2 className="mt-2 text-2xl font-semibold">Listado de productos</h2>
-          <p className="mt-2 text-sm text-slate-400">Aquí verás los productos disponibles desde la API.</p>
+          <p className="text-sm uppercase tracking-[0.35em] text-cyan-400">{t('products.sectionTitle')}</p>
+          <h2 className="mt-2 text-2xl font-semibold">{t('products.title')}</h2>
+          <p className="mt-2 text-sm text-slate-400">{t('products.subtitle')}</p>
         </div>
 
         <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-400">
           <Search className="h-4 w-4" />
-          <span>{productCount} productos cargados</span>
+          <span>{t('common.productsLoaded', { count: productCount })}</span>
         </div>
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-10 text-center text-slate-300">Cargando productos...</div>
+        <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-10 text-center text-slate-300">{t('common.loading')}</div>
       ) : null}
 
       {error ? <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">{error}</div> : null}
@@ -88,7 +90,7 @@ export function ProductsPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold">{product.name}</h3>
-                    <p className="text-sm text-slate-400">Producto activo</p>
+                    <p className="text-sm text-slate-400">{t('common.activeProduct')}</p>
                   </div>
                 </div>
               </article>
@@ -99,8 +101,8 @@ export function ProductsPage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-400">
               <Sparkles className="h-5 w-5" />
             </div>
-            <h3 className="text-lg font-semibold">No hay productos disponibles</h3>
-            <p className="mt-2 text-sm text-slate-400">La API respondió vacía, pero la pantalla ya está preparada para mostrar los datos cuando lleguen.</p>
+            <h3 className="text-lg font-semibold">{t('common.noProductsTitle')}</h3>
+            <p className="mt-2 text-sm text-slate-400">{t('common.noProductsDescription')}</p>
           </div>
         )
       ) : null}
