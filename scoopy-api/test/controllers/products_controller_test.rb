@@ -3,6 +3,15 @@ require "test_helper"
 class ProductsControllerTest < ActionDispatch::IntegrationTest
   setup do
     @product = products(:one)
+    @user = User.create!(email: "products.user@example.com", password: "123456")
+    @auth_headers = {
+      "Authorization" => "Bearer #{sign_in(@user)}"
+    }
+  end
+
+  def sign_in(user)
+    post user_session_url, params: { user: { email: user.email, password: "123456" } }, as: :json
+    response.parsed_body.fetch("token")
   end
 
   test "should get index with providers and providers_products nested" do
@@ -10,7 +19,7 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     provider = Provider.create!(name: "Example provider", url: "https://example.com")
     provider_product = product.providers_products.create!(provider: provider, ssn: "12345")
 
-    get products_url, as: :json
+    get products_url, headers: @auth_headers, as: :json
 
     assert_response :success
     body = response.parsed_body
@@ -25,7 +34,7 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
 
   test "should create product" do
     assert_difference("Product.count") do
-      post products_url, params: { product: { name: @product.name } }, as: :json
+      post products_url, params: { product: { name: @product.name } }, headers: @auth_headers, as: :json
     end
 
     assert_response :created
@@ -36,7 +45,7 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     provider = Provider.create!(name: "Example provider", url: "https://example.com")
     product.providers_products.create!(provider: provider, ssn: "12345")
 
-    get product_url(product), as: :json
+    get product_url(product), headers: @auth_headers, as: :json
 
     assert_response :success
     body = response.parsed_body
@@ -44,13 +53,13 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should update product" do
-    patch product_url(@product), params: { product: { name: @product.name } }, as: :json
+    patch product_url(@product), params: { product: { name: @product.name } }, headers: @auth_headers, as: :json
     assert_response :success
   end
 
   test "should destroy product" do
     assert_difference("Product.count", -1) do
-      delete product_url(@product), as: :json
+      delete product_url(@product), headers: @auth_headers, as: :json
     end
 
     assert_response :no_content

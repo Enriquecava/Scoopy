@@ -7,3 +7,17 @@
 #   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
 #     MovieGenre.find_or_create_by!(name: genre_name)
 #   end
+return unless Rails.env.development?
+
+product = Product.find_or_create_by!(name: "test")
+provider = Provider.find_or_create_by!(name: "Amazon", url: "https://www.amazon.es")
+ProvidersProduct.find_or_create_by!(product: product, provider: provider) do |record|
+  record.ssn = "test123"
+end
+PriceHistory.find_or_create_by!(product: product, provider: provider) do |record|
+  record.price = 10.0
+  record.currency = "EUR"
+end
+User.find_or_create_by!(email: "test@example.com") do |user|
+  user.password = "123456"
+end
