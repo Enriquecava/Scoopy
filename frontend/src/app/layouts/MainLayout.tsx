@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { LogOut, Package2 } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useAuth } from '../providers/AuthProvider'
 import { useTranslation } from '../../shared/i18n'
 import type { ReactNode } from 'react'
@@ -23,7 +23,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       <header className="border-b border-white/10 bg-slate-900/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link to="/products" className="flex items-center gap-2 text-lg font-semibold">
-            <Package2 className="h-5 w-5 text-cyan-400" />
+            <img src="/logo.png" alt="Scoopy" className="h-6 w-6 rounded-md object-cover" />
             {t('common.brand')}
           </Link>
 
