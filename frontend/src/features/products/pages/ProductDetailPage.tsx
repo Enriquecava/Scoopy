@@ -97,32 +97,32 @@ function getYAxisDomain(values: number[]): YAxisDomain {
   }
 }
 
-function formatDate(value: string) {
+function formatDate(value: string, locale: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
     return value
   }
 
-  return new Intl.DateTimeFormat('es-ES', {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date)
 }
 
-function formatShortDate(value: string) {
+function formatShortDate(value: string, locale: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
     return value
   }
 
-  return new Intl.DateTimeFormat('es-ES', {
+  return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
   }).format(date)
 }
 
-function formatCurrency(value: number, currency = 'EUR') {
-  return new Intl.NumberFormat('es-ES', {
+function formatCurrency(value: number, locale: string, currency = 'EUR') {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
     maximumFractionDigits: 2,
@@ -133,7 +133,7 @@ export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const [product, setProduct] = useState<ProductDetail | null>(null)
   const [priceHistory, setPriceHistory] = useState<PriceHistoryItem[]>([])
   const [activePoint, setActivePoint] = useState<ChartPoint | null>(null)
@@ -183,8 +183,8 @@ export function ProductDetailPage() {
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     )[0]
 
-    return latestEntry ? formatDate(latestEntry.created_at) : null
-  }, [priceHistory])
+    return latestEntry ? formatDate(latestEntry.created_at, locale) : null
+  }, [locale, priceHistory])
 
   const chartPoints = useMemo(() => {
     const groupedEntries = new Map<string, { entry: PriceHistoryItem; numericPrice: number }>()
@@ -213,8 +213,8 @@ export function ProductDetailPage() {
         price: entry.price,
         currency: entry.currency ?? 'EUR',
         provider: entry.provider_name ?? 'Proveedor',
-        date: formatDate(entry.created_at),
-        shortDate: formatShortDate(entry.created_at),
+        date: formatDate(entry.created_at, locale),
+        shortDate: formatShortDate(entry.created_at, locale),
         y: numericPrice,
       }))
       .sort((a, b) => new Date(a.dayKey).getTime() - new Date(b.dayKey).getTime())
@@ -244,7 +244,7 @@ export function ProductDetailPage() {
         shortDate: entry.shortDate,
       } satisfies ChartPoint
     })
-  }, [priceHistory])
+  }, [locale, priceHistory])
 
   const yDomain = useMemo(() => getYAxisDomain(chartPoints.map((point) => point.value)), [chartPoints])
   const valueRange = yDomain.max - yDomain.min || 1
@@ -252,7 +252,7 @@ export function ProductDetailPage() {
     const ratio = index / 4
     const value = yDomain.max - ratio * valueRange
     const y = CHART_TOP + ratio * (CHART_BOTTOM - CHART_TOP)
-    const label = formatCurrency(value, 'EUR')
+    const label = formatCurrency(value, locale, 'EUR')
 
     return { label, y }
   })
@@ -424,7 +424,7 @@ export function ProductDetailPage() {
                             : 'translate(12px, -50%)',
                       }}
                     >
-                      <p className="font-semibold">{formatCurrency(activePoint.value, activePoint.currency || 'EUR')}</p>
+                      <p className="font-semibold">{formatCurrency(activePoint.value, locale, activePoint.currency || 'EUR')}</p>
                       <p>{activePoint.provider}</p>
                       <p className="text-slate-400">{activePoint.date}</p>
                     </div>
