@@ -2,6 +2,12 @@ export const products = {
   title: 'Listado de productos',
   subtitle: 'Aquí verás los productos disponibles desde la API.',
   sectionTitle: 'Productos',
+  search: {
+    label: 'Buscar productos',
+    placeholder: 'Escribe para buscar por nombre',
+    loading: 'Buscando productos...',
+    noResults: 'No hay coincidencias para tu búsqueda.',
+  },
   detail: {
     productInfo: 'Información del producto',
     providers: 'Proveedores',
