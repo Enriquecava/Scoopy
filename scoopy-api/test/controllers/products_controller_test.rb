@@ -58,7 +58,7 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     get products_url, params: { filters: "Lucas" }, headers: @auth_headers, as: :json
 
     assert_response :bad_request
-    assert_equal "parametro no soportado", response.parsed_body["error"]
+    assert_equal "unsoported parameter", response.parsed_body["error"]
   end
 
   test "should create product" do
