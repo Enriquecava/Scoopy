@@ -32,6 +32,35 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_equal ["Example provider"], product_payload.fetch("providers_products").map { |provider_payload| provider_payload["provider_name"] }
   end
 
+  test "should filter products by partial name match" do
+    matching_product = Product.create!(name: "Gel asd limpiador")
+    Product.create!(name: "Crema hidratante")
+
+    get products_url, params: { filter: "asd" }, headers: @auth_headers, as: :json
+
+    assert_response :success
+    product_names = response.parsed_body.map { |product_payload| product_payload["name"] }
+    assert_includes product_names, matching_product.name
+    assert product_names.all? { |name| name.downcase.include?("asd") }
+  end
+
+  test "should filter products case insensitively" do
+    matching_product = Product.create!(name: "Suero AsD facial")
+
+    get products_url, params: { filter: "asd" }, headers: @auth_headers, as: :json
+
+    assert_response :success
+    product_names = response.parsed_body.map { |product_payload| product_payload["name"] }
+    assert_includes product_names, matching_product.name
+  end
+
+  test "should return error for unsupported query params" do
+    get products_url, params: { filters: "Lucas" }, headers: @auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "parametro no soportado", response.parsed_body["error"]
+  end
+
   test "should create product" do
     assert_difference("Product.count") do
       post products_url, params: { product: { name: @product.name } }, headers: @auth_headers, as: :json

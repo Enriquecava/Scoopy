@@ -4,7 +4,20 @@ class ProductsController < ApplicationController
 
   # GET /products
   def index
+    unsupported_params = request.query_parameters.keys - ["filter"]
+    if unsupported_params.any?
+      render json: { error: "unsupported parameter" }, status: :bad_request
+      return
+    end
+
     @products = Product.includes(:providers_products)
+    filter = params[:filter].presence
+    filter = filter.to_s.strip
+
+    if filter.present?
+      escaped_filter = ActiveRecord::Base.sanitize_sql_like(filter)
+      @products = @products.where("products.name ILIKE ?", "%#{escaped_filter}%")
+    end
 
     render json: @products, only:[ :id, :name]
     
