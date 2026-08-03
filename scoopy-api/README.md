@@ -1,70 +1,199 @@
 # Scoopy API
 
-This document describes the `scoopy-api` Rails application, including folder structure, setup, routes, JSON input/output shape, and API behavior.
+Backend API for Scoopy, built with Ruby on Rails.
 
-## Project structure
+This service provides:
 
-The `scoopy-api` folder contains the API backend built with Ruby on Rails.
+- User authentication with Devise + JWT
+- Product CRUD
+- Product search by name
+- Product price history retrieval
 
-- `app/controllers/` - API controllers. `ProductsController` handles product CRUD and price history endpoints.
-- `app/models/` - Active Record models. Main models are `Product`, `ProvidersProduct`, `Provider`, and `PriceHistory`.
-- `config/routes.rb` - REST routes for `products` and the custom `price_history` member action.
-- `db/migrate/` - database migrations that create the tables and constraints.
-- `db/schema.rb` - current schema snapshot.
-- `Gemfile` - Ruby/Rails dependencies.
-- `config/environments/` - environment-specific Rails configs.
-- `config/initializers/` - Rails initialization code.
+## Why Rails + Devise JWT
+
+We use Rails to move quickly with strong conventions and PostgreSQL integration. For authentication, we use Devise with `devise-jwt` so clients can authenticate through bearer tokens in stateless API requests.
+
+## Tech Stack
+
+- Ruby on Rails `~> 8.1.3`
+- PostgreSQL
+- Devise + devise-jwt
+- Rack CORS
+
+## Project Structure
+
+```text
+scoopy-api/
+  app/
+    controllers/
+      application_controller.rb
+      products_controller.rb
+      users/
+        registrations_controller.rb
+        sessions_controller.rb
+    models/
+      user.rb
+      product.rb
+      provider.rb
+      providers_product.rb
+      price_history.rb
+      jwt_denylist.rb
+    serializers/
+      user_serializer.rb
+  config/
+    routes.rb
+    initializers/
+      devise.rb
+      cors.rb
+  db/
+    migrate/
+    schema.rb
+  bin/
+    setup
+    rails
+    rubocop
+    brakeman
+    bundler-audit
+    ci
+```
 
 ## Setup
 
-### Requirements
+### Prerequisites
 
 - Ruby compatible with Rails `~> 8.1.3`
-- PostgreSQL database
 - Bundler
-- `dotenv-rails` is configured if you use environment variables
+- PostgreSQL running locally
 
-### Install dependencies
+### Install Dependencies
 
 ```bash
 cd scoopy-api
 bundle install
 ```
 
-### Database setup
+### Database
 
 ```bash
 bundle exec rails db:create db:migrate
 ```
 
-If your database is already created, run:
+If the database already exists:
 
 ```bash
 bundle exec rails db:migrate
 ```
 
-### Run the server
+### Start the Server
 
 ```bash
 bundle exec rails server
 ```
 
-By default the app runs on `http://localhost:3000`.
+Default URL: `http://localhost:3000`
 
-## API routes
+## Environment and Configuration
 
-The main API endpoints are defined in `config/routes.rb`:
+- JWT secret is configured in this order:
+  - `Rails.application.credentials.devise_jwt_secret_key`
+  - `DEVISE_JWT_SECRET_KEY`
+  - `Rails.application.secret_key_base`
+- CORS currently allows frontend local origins:
+  - `http://localhost:5137`
+  - `http://127.0.0.1:5137`
+  - `http://localhost:5173`
+  - `http://127.0.0.1:5173`
+- `Authorization` header is exposed in CORS.
 
-```ruby
-resources :products do
-  member do
-    get :price_history
-  end
-end
+## Authentication and Users
+
+User auth uses Devise JSON controllers under `users/`.
+
+### Register User
+
+- `POST /users`
+
+Request example:
+
+```json
+{
+  "user": {
+    "email": "user@example.com",
+    "password": "password123",
+    "password_confirmation": "password123"
+  }
+}
 ```
 
-This creates:
+Success response (`201 Created`):
 
+```json
+{
+  "message": "User created successfully",
+  "user": {
+    "id": 1,
+    "email": "user@example.com"
+  }
+}
+```
+
+### Sign In
+
+- `POST /users/sign_in`
+
+Request example:
+
+```json
+{
+  "user": {
+    "email": "user@example.com",
+    "password": "password123"
+  }
+}
+```
+
+Success response (`200 OK`):
+
+```json
+{
+  "user": {
+    "id": 1,
+    "email": "user@example.com"
+  },
+  "token": "<jwt-token>"
+}
+```
+
+### Sign Out
+
+- `DELETE /users/sign_out`
+- Requires bearer token.
+- Success response: `204 No Content`
+
+### JWT Behavior
+
+- Token dispatch on `POST /users/sign_in`
+- Token revocation on `DELETE /users/sign_out`
+- Expiration: 24 hours
+- Revoked tokens are stored in `jwt_denylist`
+
+## Authorization
+
+All product endpoints require authentication via:
+
+```http
+Authorization: Bearer <jwt-token>
+```
+
+In controller terms, `ProductsController` is protected with `authenticate_user!`.
+
+## API Routes
+
+Defined in `config/routes.rb`:
+
+- `POST /users`
+- `POST /users/sign_in`
+- `DELETE /users/sign_out`
 - `GET /products`
 - `GET /products/:id`
 - `POST /products`
@@ -73,32 +202,11 @@ This creates:
 - `DELETE /products/:id`
 - `GET /products/:id/price_history`
 
-## Data models and relationships
-
-### Product
-
-- has many `providers_products`
-- has many `providers` through `providers_products`
-- has many `price_histories`
-
-### ProvidersProduct
-
-- join model between `Product` and `Provider`
-- stores `ssn` and `provider_id`
-- is accepted as nested attributes from `Product`
-
-### PriceHistory
-
-- belongs to `Product`
-- belongs to `Provider`
-
-## How the API behaves
+## Product Endpoints
 
 ### GET /products
 
-Returns a list of products with minimal fields.
-
-Response sample:
+Returns product list with minimal shape:
 
 ```json
 [
@@ -109,11 +217,33 @@ Response sample:
 ]
 ```
 
+Supported query params:
+
+- `filter` only
+
+Search behavior:
+
+- Trimmed before use
+- Case-insensitive match using `ILIKE`
+- Safe wildcard handling with SQL-like escaping
+
+Example:
+
+- `GET /products?filter=nutella`
+
+Unsupported params behavior:
+
+- Any query key different from `filter` returns `400 Bad Request` with:
+
+```json
+{
+  "error": "unsupported parameter"
+}
+```
+
 ### GET /products/:id
 
-Returns a single product and its `providers_products` relations.
-
-Response sample:
+Returns a single product plus `providers_products`:
 
 ```json
 {
@@ -131,9 +261,7 @@ Response sample:
 
 ### POST /products
 
-Creates a new `Product` and accepts nested `providers_products`.
-
-Request sample:
+Creates product and nested provider links:
 
 ```json
 {
@@ -149,81 +277,31 @@ Request sample:
 }
 ```
 
-Response sample:
-
-```json
-{
-  "id": "6557acf5-4087-4e67-afe5-6ec343ba4ad4",
-  "name": "prueba1",
-  "providers_products": [
-    {
-      "id": 1,
-      "ssn": "ABC123",
-      "provider_name": "Provider A"
-    }
-  ]
-}
-```
-
 ### PATCH /products/:id
 
-Updates the product partially. If nested `providers_products_attributes` are provided, Rails will create new `ProvidersProduct` records unless an existing nested record is identified.
+Partial update.
 
-Request sample:
-
-```json
-{
-  "product": {
-    "name": "prueba1 updated",
-    "providers_products_attributes": [
-      {
-        "ssn": "XYZ987",
-        "provider_id": 2
-      }
-    ]
-  }
-}
-```
-
-Behavior:
-
-- `PATCH` adds or updates without deleting existing `providers_products`.
-- use nested `:_destroy` if you want to remove existing records and the child record is identified.
+- Updates provided fields.
+- Can append or modify nested `providers_products_attributes`.
+- Does not automatically clear existing nested rows.
 
 ### PUT /products/:id
 
-In this API, `PUT` is implemented as a full replacement for nested `providers_products`.
+Replace-style update for nested providers.
 
-Behavior:
-
-- `request.put?` clears existing `providers_products` before applying `update_product_params`
-- the request body should include the full desired state for the product and its nested providers
-
-Request sample:
-
-```json
-{
-  "product": {
-    "name": "prueba1 replaced",
-    "providers_products_attributes": [
-      {
-        "ssn": "NEW333",
-        "provider_id": 3
-      }
-    ]
-  }
-}
-```
+- Existing `providers_products` are cleared before update.
+- Send the full desired nested state in request body.
 
 ### DELETE /products/:id
 
-Deletes the product and any associated `providers_products` and `price_histories` because of `dependent: :delete_all`.
+Deletes product and dependent records:
+
+- `providers_products`
+- `price_histories`
 
 ### GET /products/:id/price_history
 
-Returns the product data first and then its price history array.
-
-Response sample:
+Returns product identity and sorted history (newest first):
 
 ```json
 {
@@ -240,87 +318,103 @@ Response sample:
 }
 ```
 
-## JSON request/response shape
+## Data Model Summary
 
-### Create/Update `Product`
+- `Product` has many `providers_products` and `price_histories`.
+- `Provider` has many `providers_products`.
+- `ProvidersProduct` belongs to `product` and `provider`.
+- `PriceHistory` belongs to `product` and `provider` (foreign key `providers_id`).
+- `User` authenticates with Devise JWT and uses `JwtDenylist` for revocation.
 
-`POST /products` and `PATCH/PUT /products/:id` expect nested attributes under `providers_products_attributes`:
+## Example Authenticated Requests
 
-```json
-{
-  "product": {
-    "name": "string",
-    "providers_products_attributes": [
-      {
-        "ssn": "string",
-        "provider_id": 1
-      }
-    ]
-  }
-}
+Sign in and store token:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:3000/users/sign_in \
+  -H "Content-Type: application/json" \
+  -d '{"user":{"email":"user@example.com","password":"password123"}}' | jq -r '.token')
 ```
 
-### Product response
+List products:
 
-Product response includes a list of `providers_products` objects with `provider_name` method output.
-
-```json
-{
-  "id": "uuid",
-  "name": "string",
-  "providers_products": [
-    {
-      "id": 1,
-      "ssn": "string",
-      "provider_name": "string"
-    }
-  ]
-}
+```bash
+curl -X GET http://localhost:3000/products \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-### Price history response
+Search products:
 
-```json
-{
-  "id": "uuid",
-  "name": "string",
-  "price_history": [
-    {
-      "price": 0.0,
-      "currency": "EUR",
-      "created_at": "2026-07-05T14:05:30.310Z",
-      "provider_name": "Provider A"
-    }
-  ]
-}
+```bash
+curl -X GET "http://localhost:3000/products?filter=gel" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-## API flow diagram
+## Contributing
 
-```mermaid
-flowchart LR
-  ProductModel[Product model]
-  ProvidersProductModel[ProvidersProduct model]
-  ProviderModel[Provider model]
-  PriceHistoryModel[PriceHistory model]
+### 1. Create a Branch
 
-  ProductModel -->|has_many| ProvidersProductModel
-  ProvidersProductModel -->|belongs_to| ProviderModel
-  ProductModel -->|has_many| PriceHistoryModel
-  PriceHistoryModel -->|belongs_to| ProviderModel
+From repository root:
 
-  client[Client]
-  client -->|GET /products| ProductsController
-  client -->|GET /products/:id| ProductsController
-  client -->|POST /products| ProductsController
-  client -->|PATCH /products/:id| ProductsController
-  client -->|PUT /products/:id| ProductsController
-  client -->|GET /products/:id/price_history| ProductsController
+```bash
+git checkout -b <type>/<short-description>
 ```
+
+Example:
+
+```bash
+git checkout -b feat/products-search-docs
+```
+
+### 2. Make and Validate Changes
+
+Inside `scoopy-api/`:
+
+```bash
+bundle exec rails test
+bin/rubocop
+bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error
+bin/bundler-audit
+```
+
+Or run the full project CI script:
+
+```bash
+bin/ci
+```
+
+### 3. Keep Documentation Updated
+
+If behavior changes, update:
+
+- Endpoint docs
+- Request/response examples
+- Authentication notes
+- CORS or env var notes
+
+### 4. Open Pull Request
+
+PR should include:
+
+- Clear summary of changes
+- Any API contract changes
+- Testing evidence (commands run + results)
+- Migration notes if schema changed
+
+## Pull Request Checklist (API)
+
+- [ ] Branch is up to date with `dev`
+- [ ] `bundle exec rails test` passes
+- [ ] `bin/rubocop` passes
+- [ ] `bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error` passes
+- [ ] `bin/bundler-audit` passes
+- [ ] `bin/ci` passes (recommended)
+- [ ] Endpoints and examples in this README are updated
+- [ ] Auth-protected routes were tested with and without token
+- [ ] Product search (`GET /products?filter=...`) was verified manually
 
 ## Notes
 
-- `providers_products_attributes` is required for nested provider-product creation.
-- `provider_id` must exist in the `providers` table, otherwise the database foreign key constraint will fail.
-- The application is designed as an API backend. If you want a full front-end, add a separate client that calls these JSON endpoints.
-- `PUT` is used here as a replace operation for nested children, while `PATCH` is used for partial updates.
+- API responses are JSON by default in the documented routes.
+- `provider_id` in nested product payloads must exist in `providers`.
+- This service is API-first and intended to be consumed by frontend and/or automation clients.
