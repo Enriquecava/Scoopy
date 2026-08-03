@@ -1,9 +1,10 @@
 import { getProductsBySSN, upsertProductPrice } from './postgres';
 import { amazonScraper } from '../providers/amazon';
 import { primorScraper } from '../providers/primor';
+import { druniScraper } from '../providers/druni';
 import { ScraperFn } from '../utils/types';
 import { Browser, chromium } from '@playwright/test';
-import {AMAZON_PROVIDER_ID,CARREFOUR_PROVIDER_ID, PRIMOR_PROVIDER_ID} from '../utils/providers';
+import {AMAZON_PROVIDER_ID,CARREFOUR_PROVIDER_ID, PRIMOR_PROVIDER_ID, DRUNI_PROVIDER_ID} from '../utils/providers';
 import { carrefourScraper } from '../providers/carrefour';
 import { closeLogger, LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
 
@@ -12,7 +13,8 @@ const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
 const scrapers: Record<number, ScraperFn> = {
   [AMAZON_PROVIDER_ID]: amazonScraper,
   [CARREFOUR_PROVIDER_ID]: carrefourScraper,
-  [PRIMOR_PROVIDER_ID]: primorScraper
+  [PRIMOR_PROVIDER_ID]: primorScraper,
+  [DRUNI_PROVIDER_ID]: druniScraper
 };
 
 export async function scrapeAndStoreProductPrice(
