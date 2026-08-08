@@ -66,8 +66,8 @@ export async function getProductsBySSN(ssn: string): Promise<{
       product_id,
       p.url
     FROM providers_products as pp
-    JOIN products as p
-    ON pp.product_id = p.id
+    JOIN providers as p
+    ON pp.provider_id = p.id
     WHERE ssn = $1
     LIMIT 1;
     `,
