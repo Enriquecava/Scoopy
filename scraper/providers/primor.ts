@@ -5,13 +5,13 @@ import { CookiesPage } from '../page/primor/cookiePage';
 import { HomePage } from '../page/primor/homePage';
 import { SearchListPage } from '../page/primor/searchListPage';
 
-export const primorScraper: ScraperFn = async ({context,productId }) => {
+export const primorScraper: ScraperFn = async ({context,productId,url }) => {
 
   try {
     logger.info({ event: LOG_EVENT.PROVIDER_SCRAPE_STARTED, provider: 'primor', productId }, 'Starting Primor scraper');
 
     const page = await context.newPage();
-    await page.goto('https://www.primor.eu/es_es/');
+    await page.goto(url);
     const cookiesPage = new CookiesPage(page);
     const homePage = new HomePage(page);
     const searchListPage = new SearchListPage(page);

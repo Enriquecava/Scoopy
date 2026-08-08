@@ -5,13 +5,13 @@ import { SearchListPage } from '../page/amazon/searchListPage';
 import { LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
 import { ScraperFn } from '../utils/types';
 
-export const amazonScraper: ScraperFn = async ({context,productId }) => {
+export const amazonScraper: ScraperFn = async ({context,productId,url }) => {
 
   try {
     logger.info({ event: LOG_EVENT.PROVIDER_SCRAPE_STARTED, provider: 'amazon', productId }, 'Starting Amazon scrape');
 
     const page = await context.newPage();
-    await page.goto('https://www.amazon.es/');
+    await page.goto(url);
 
     const homePage = new HomePage(page);
     const searchListPage = new SearchListPage(page);

@@ -5,12 +5,12 @@ import { LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
 import { ScraperFn } from '../utils/types';
 import { HomePage } from '../page/carrefour/homePage';
 
-export const carrefourScraper: ScraperFn = async ({context,productId }) => {
+export const carrefourScraper: ScraperFn = async ({context,productId,url }) => {
   try{
     logger.info({ event: LOG_EVENT.PROVIDER_SCRAPE_STARTED, provider: 'carrefour', productId }, 'Starting Carrefour scrape');
 
     const page = await context.newPage();
-    await page.goto(`https://www.carrefour.es/`);
+    await page.goto(url);
     const homePage = new HomePage(page)
     const searchListPage = new SearchListPage(page)
     const cookiesPage = new CookiesPage(page)
