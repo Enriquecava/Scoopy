@@ -15,12 +15,13 @@ export async function processProductsFromDatabase(): Promise<void> {
    });
 
   try {
-    for (const { ssn, provider_id, product_id } of result) {
+    for (const { ssn, provider_id, product_id ,url} of result) {
       try {
         const price = await scrapeAndStoreProductPrice(
           browser,
           ssn,
           provider_id,
+          url,
         );
         await upsertProductPrice({
           provider_id,

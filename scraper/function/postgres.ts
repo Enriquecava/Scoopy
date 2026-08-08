@@ -25,6 +25,7 @@ export async function getProducts(): Promise<
     ssn: string;
     provider_id: number;
     product_id: UUID;
+    url: string;
   }[]
 > {
   const client = await pool.connect();
@@ -33,8 +34,9 @@ export async function getProducts(): Promise<
       ssn: string;
       provider_id: number;
       product_id: UUID;
+      url: string
     }>(
-      'SELECT ssn, provider_id, product_id FROM providers_products',
+      'SELECT ssn, provider_id, product_id, p.url FROM providers_products AS pp JOIN providers AS p ON pp.provider_id = p.id',
     );
     return result.rows;
   } finally {
@@ -46,6 +48,7 @@ export async function getProductsBySSN(ssn: string): Promise<{
   ssn: string;
   provider_id: number;
   product_id: UUID;
+  url: string;
 } | null> {
   const client = await pool.connect();
 
@@ -54,13 +57,17 @@ export async function getProductsBySSN(ssn: string): Promise<{
       ssn: string;
       provider_id: number;
       product_id: UUID;
+      url: string;
     }>(
       `
     SELECT 
       ssn,
       provider_id,
-      product_id
-    FROM providers_products
+      product_id,
+      p.url
+    FROM providers_products as pp
+    JOIN providers as p
+    ON pp.provider_id = p.id
     WHERE ssn = $1
     LIMIT 1;
     `,
