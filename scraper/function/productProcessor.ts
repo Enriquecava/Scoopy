@@ -21,7 +21,18 @@ const scrapers: Record<number, ScraperFn> = {
   [EL_CORTE_INGLES_PROVIDER_ID]: elCorteInglesScraper,
 };
 
-const MAX_SCRAPE_ATTEMPTS = 2;
+const MAX_SCRAPE_RETRIES = 3;
+
+class ScraperExecutionError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message);
+    this.name = 'ScraperExecutionError';
+
+    if (options && 'cause' in options) {
+      (this as Error & { cause?: unknown }).cause = options.cause;
+    }
+  }
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -54,7 +65,12 @@ export async function scrapeAndStoreProductPrice(
       get: () => false,
     })
   })
-  return scraper({ context: context, productId: asin, url: url });
+
+  try {
+    return await scraper({ context: context, productId: asin, url: url });
+  } catch (error) {
+    throw new ScraperExecutionError('Scraper execution failed', { cause: error });
+  }
 }
 
 export interface ScrapeTarget {
@@ -64,22 +80,49 @@ export interface ScrapeTarget {
   url: string;
 }
 
+export async function runScrapeWithRetries(params: {
+  maxAttempts: number;
+  runAttempt: (attempt: number) => Promise<number>;
+  onAttemptFailed: (attempt: number, error: unknown) => Promise<void>;
+  onAllAttemptsFailed: () => Promise<void>;
+}): Promise<number> {
+  const { maxAttempts, runAttempt, onAttemptFailed, onAllAttemptsFailed } = params;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await runAttempt(attempt);
+    } catch (error) {
+      lastError = error;
+      await onAttemptFailed(attempt, error);
+    }
+  }
+
+  await onAllAttemptsFailed();
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Scraper failed after ${maxAttempts} attempts`);
+}
+
 async function scrapeProductWithRetries(
   browser: Browser,
   product: ScrapeTarget,
 ): Promise<number> {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt <= MAX_SCRAPE_ATTEMPTS; attempt += 1) {
-    try {
-      return await scrapeAndStoreProductPrice(
+  return runScrapeWithRetries({
+    maxAttempts: MAX_SCRAPE_RETRIES,
+    runAttempt: async () => {
+      return scrapeAndStoreProductPrice(
         browser,
         product.ssn,
         product.provider_id,
         product.url,
       );
-    } catch (error) {
-      lastError = error;
+    },
+    onAttemptFailed: async (attempt, error) => {
+      if (!(error instanceof ScraperExecutionError)) {
+        throw error;
+      }
 
       logger.warn({
         event: LOG_EVENT.PRODUCT_PROCESSING_FAILED,
@@ -87,22 +130,41 @@ async function scrapeProductWithRetries(
         provider_id: Number(product.provider_id),
         product_id: product.product_id,
         attempt,
-        max_attempts: MAX_SCRAPE_ATTEMPTS,
+        max_attempts: MAX_SCRAPE_RETRIES,
         error: normalizeLogError(error),
       }, 'Scrape attempt failed');
 
-      if (attempt < MAX_SCRAPE_ATTEMPTS) {
+      if (attempt < MAX_SCRAPE_RETRIES) {
         await delay(1000 * attempt);
       }
-    }
-  }
+    },
+    onAllAttemptsFailed: async () => {
+      await tryMarkScraperIncidentOpen({
+        provider_id: product.provider_id,
+        product_id: product.product_id,
+      });
+    },
+  });
+}
 
-  await tryMarkScraperIncidentOpen({
+async function saveScrapedPrice(product: ScrapeTarget, price: number): Promise<void> {
+  await upsertProductPrice({
     provider_id: product.provider_id,
     product_id: product.product_id,
+    price,
+    currency: 'EUR',
   });
+}
 
-  throw lastError instanceof Error ? lastError : new Error('Scraper failed after 3 attempts');
+function logScrapedPriceSaved(product: ScrapeTarget, price: number): void {
+  logger.info({
+    event: LOG_EVENT.PRODUCT_PRICE_SAVED,
+    asin: product.ssn,
+    provider_id: Number(product.provider_id),
+    product_id: product.product_id,
+    price,
+    currency: 'EUR',
+  }, 'Product price saved');
 }
 
 export async function processProductWithRetries(
@@ -116,21 +178,8 @@ export async function processProductWithRetries(
     product_id: product.product_id,
   });
 
-  await upsertProductPrice({
-    provider_id: product.provider_id,
-    product_id: product.product_id,
-    price,
-    currency: 'EUR',
-  });
-
-  logger.info({
-    event: LOG_EVENT.PRODUCT_PRICE_SAVED,
-    asin: product.ssn,
-    provider_id: Number(product.provider_id),
-    product_id: product.product_id,
-    price,
-    currency: 'EUR',
-  }, 'Product price saved');
+  await saveScrapedPrice(product, price);
+  logScrapedPriceSaved(product, price);
 }
 
 async function runFromCli(asin?: string): Promise<void> {

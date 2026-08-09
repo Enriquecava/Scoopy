@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_08_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_09_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -63,6 +63,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_08_000001) do
     t.index ["product_id"], name: "index_scraper_incidents_on_product_id"
     t.index ["provider_id", "product_id"], name: "index_scraper_incidents_on_provider_id_and_product_id", unique: true
     t.index ["provider_id"], name: "index_scraper_incidents_on_provider_id"
+    t.check_constraint "status::text = ANY (ARRAY['open'::character varying, 'resolved'::character varying]::text[])", name: "scraper_incidents_status_check"
   end
 
   create_table "users", force: :cascade do |t|

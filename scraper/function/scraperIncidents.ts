@@ -1,32 +1,22 @@
 import { UUID } from 'crypto';
-import { hasOpenScraperIncident, resolveScraperIncidentStatus, upsertScraperIncidentStatus } from './postgres';
+import { openScraperIncidentIfNeeded, resolveOpenScraperIncident } from './postgres';
 import { LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
 
 export async function markScraperIncidentOpen(input: {
   provider_id: number;
   product_id: UUID;
-}): Promise<void> {
-  const openIncidentExists = await hasOpenScraperIncident({
+}): Promise<boolean> {
+  return openScraperIncidentIfNeeded({
     provider_id: input.provider_id,
     product_id: input.product_id,
-  });
-
-  if (openIncidentExists) {
-    return;
-  }
-
-  await upsertScraperIncidentStatus({
-    provider_id: input.provider_id,
-    product_id: input.product_id,
-    status: 'open',
   });
 }
 
 export async function markScraperIncidentResolved(input: {
   provider_id: number;
   product_id: UUID;
-}): Promise<void> {
-  await resolveScraperIncidentStatus({
+}): Promise<boolean> {
+  return resolveOpenScraperIncident({
     provider_id: input.provider_id,
     product_id: input.product_id,
   });
@@ -35,9 +25,9 @@ export async function markScraperIncidentResolved(input: {
 export async function tryMarkScraperIncidentOpen(input: {
   provider_id: number;
   product_id: UUID;
-}): Promise<void> {
+}): Promise<boolean> {
   try {
-    await markScraperIncidentOpen(input);
+    return await markScraperIncidentOpen(input);
   } catch (error) {
     logger.warn({
       event: LOG_EVENT.PRODUCT_PROCESSING_FAILED,
@@ -45,15 +35,16 @@ export async function tryMarkScraperIncidentOpen(input: {
       product_id: input.product_id,
       error: normalizeLogError(error),
     }, 'Unable to store scraper incident');
+    return false;
   }
 }
 
 export async function tryMarkScraperIncidentResolved(input: {
   provider_id: number;
   product_id: UUID;
-}): Promise<void> {
+}): Promise<boolean> {
   try {
-    await markScraperIncidentResolved(input);
+    return await markScraperIncidentResolved(input);
   } catch (error) {
     logger.warn({
       event: LOG_EVENT.PRODUCT_PROCESSING_FAILED,
@@ -61,5 +52,6 @@ export async function tryMarkScraperIncidentResolved(input: {
       product_id: input.product_id,
       error: normalizeLogError(error),
     }, 'Unable to resolve scraper incident');
+    return false;
   }
 }

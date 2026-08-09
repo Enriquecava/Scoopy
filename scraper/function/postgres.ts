@@ -20,8 +20,6 @@ export interface UpsertPriceInput {
   created_at?: Date;
 }
 
-export type ScraperIncidentStatus = 'open' | 'resolved';
-
 export async function getProducts(): Promise<
   {
     ssn: string;
@@ -114,28 +112,7 @@ export async function upsertProductPrice(
   }
 }
 
-export async function upsertScraperIncidentStatus(input: {
-  provider_id: number;
-  product_id: UUID;
-  status: ScraperIncidentStatus;
-}): Promise<void> {
-  const { provider_id, product_id, status } = input;
-  const client = await pool.connect();
-
-  try {
-    await client.query(
-      `INSERT INTO scraper_incidents (provider_id, product_id, status, created_at, updated_at)
-       VALUES ($1, $2, $3, NOW(), NOW())
-       ON CONFLICT (provider_id, product_id)
-       DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()`,
-      [provider_id, product_id, status],
-    );
-  } finally {
-    client.release();
-  }
-}
-
-export async function hasOpenScraperIncident(input: {
+export async function openScraperIncidentIfNeeded(input: {
   provider_id: number;
   product_id: UUID;
 }): Promise<boolean> {
@@ -143,39 +120,41 @@ export async function hasOpenScraperIncident(input: {
   const client = await pool.connect();
 
   try {
-    const result = await client.query<{ exists: boolean }>(
-      `SELECT EXISTS (
-         SELECT 1
-         FROM scraper_incidents
-         WHERE provider_id = $1
-           AND product_id = $2
-           AND status = 'open'
-       ) AS exists`,
+    const result = await client.query(
+      `INSERT INTO scraper_incidents (provider_id, product_id, status, created_at, updated_at)
+       VALUES ($1, $2, 'open', NOW(), NOW())
+       ON CONFLICT (provider_id, product_id)
+       DO UPDATE SET status = 'open', updated_at = NOW()
+       WHERE scraper_incidents.status <> 'open'
+       RETURNING provider_id`,
       [provider_id, product_id],
     );
 
-    return result.rows[0]?.exists ?? false;
+    return result.rowCount === 1;
   } finally {
     client.release();
   }
 }
 
-export async function resolveScraperIncidentStatus(input: {
+export async function resolveOpenScraperIncident(input: {
   provider_id: number;
   product_id: UUID;
-}): Promise<void> {
+}): Promise<boolean> {
   const { provider_id, product_id } = input;
   const client = await pool.connect();
 
   try {
-    await client.query(
+    const result = await client.query(
       `UPDATE scraper_incidents
        SET status = 'resolved', updated_at = NOW()
        WHERE provider_id = $1
          AND product_id = $2
-         AND status = 'open'`,
+         AND status = 'open'
+       RETURNING provider_id`,
       [provider_id, product_id],
     );
+
+    return result.rowCount === 1;
   } finally {
     client.release();
   }
