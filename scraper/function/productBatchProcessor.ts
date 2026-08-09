@@ -1,7 +1,7 @@
-import { getProducts } from './postgres';
+import { scrapeAndStoreProductPrice } from './productProcessor';
+import { getProducts, upsertProductPrice } from './postgres';
 import { chromium } from '@playwright/test';
 import { closeLogger, LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
-import { processProductWithRetries } from './productProcessor';
 
 const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
 
@@ -17,7 +17,26 @@ export async function processProductsFromDatabase(): Promise<void> {
   try {
     for (const { ssn, provider_id, product_id ,url} of result) {
       try {
-        await processProductWithRetries(browser, { ssn, provider_id, product_id, url });
+        const price = await scrapeAndStoreProductPrice(
+          browser,
+          ssn,
+          provider_id,
+          url,
+        );
+        await upsertProductPrice({
+          provider_id,
+          product_id,
+          price,
+          currency: 'EUR',
+        });
+        logger.info({
+          event: LOG_EVENT.PRODUCT_PRICE_SAVED,
+          asin: ssn,
+          provider_id: Number(provider_id),
+          product_id,
+          price,
+          currency: 'EUR',
+        }, 'Product price saved');
       } catch (error) {
         logger.error({
           event: LOG_EVENT.PRODUCT_PROCESSING_FAILED,

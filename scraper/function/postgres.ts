@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import 'dotenv/config';
 import { UUID } from 'crypto';
 
-export const pool = new Pool({
+const pool = new Pool({
   host: process.env.PGHOST,
   port: Number(process.env.PGPORT),
   user: process.env.PGUSER,
@@ -107,54 +107,6 @@ export async function upsertProductPrice(
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
-  } finally {
-    client.release();
-  }
-}
-
-export async function openScraperIncidentIfNeeded(input: {
-  provider_id: number;
-  product_id: UUID;
-}): Promise<boolean> {
-  const { provider_id, product_id } = input;
-  const client = await pool.connect();
-
-  try {
-    const result = await client.query(
-      `INSERT INTO scraper_incidents (provider_id, product_id, status, created_at, updated_at)
-       VALUES ($1, $2, 'open', NOW(), NOW())
-       ON CONFLICT (provider_id, product_id)
-       DO UPDATE SET status = 'open', updated_at = NOW()
-       WHERE scraper_incidents.status <> 'open'
-       RETURNING provider_id`,
-      [provider_id, product_id],
-    );
-
-    return result.rowCount === 1;
-  } finally {
-    client.release();
-  }
-}
-
-export async function resolveOpenScraperIncident(input: {
-  provider_id: number;
-  product_id: UUID;
-}): Promise<boolean> {
-  const { provider_id, product_id } = input;
-  const client = await pool.connect();
-
-  try {
-    const result = await client.query(
-      `UPDATE scraper_incidents
-       SET status = 'resolved', updated_at = NOW()
-       WHERE provider_id = $1
-         AND product_id = $2
-         AND status = 'open'
-       RETURNING provider_id`,
-      [provider_id, product_id],
-    );
-
-    return result.rowCount === 1;
   } finally {
     client.release();
   }
