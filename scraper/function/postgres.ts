@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import 'dotenv/config';
 import { UUID } from 'crypto';
 
-const pool = new Pool({
+export const pool = new Pool({
   host: process.env.PGHOST,
   port: Number(process.env.PGPORT),
   user: process.env.PGUSER,
@@ -19,6 +19,8 @@ export interface UpsertPriceInput {
   updated_at?: Date;
   created_at?: Date;
 }
+
+export type ScraperIncidentStatus = 'open' | 'resolved';
 
 export async function getProducts(): Promise<
   {
@@ -107,6 +109,73 @@ export async function upsertProductPrice(
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function upsertScraperIncidentStatus(input: {
+  provider_id: number;
+  product_id: UUID;
+  status: ScraperIncidentStatus;
+}): Promise<void> {
+  const { provider_id, product_id, status } = input;
+  const client = await pool.connect();
+
+  try {
+    await client.query(
+      `INSERT INTO scraper_incidents (provider_id, product_id, status, created_at, updated_at)
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (provider_id, product_id)
+       DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()`,
+      [provider_id, product_id, status],
+    );
+  } finally {
+    client.release();
+  }
+}
+
+export async function hasOpenScraperIncident(input: {
+  provider_id: number;
+  product_id: UUID;
+}): Promise<boolean> {
+  const { provider_id, product_id } = input;
+  const client = await pool.connect();
+
+  try {
+    const result = await client.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM scraper_incidents
+         WHERE provider_id = $1
+           AND product_id = $2
+           AND status = 'open'
+       ) AS exists`,
+      [provider_id, product_id],
+    );
+
+    return result.rows[0]?.exists ?? false;
+  } finally {
+    client.release();
+  }
+}
+
+export async function resolveScraperIncidentStatus(input: {
+  provider_id: number;
+  product_id: UUID;
+}): Promise<void> {
+  const { provider_id, product_id } = input;
+  const client = await pool.connect();
+
+  try {
+    await client.query(
+      `UPDATE scraper_incidents
+       SET status = 'resolved', updated_at = NOW()
+       WHERE provider_id = $1
+         AND product_id = $2
+         AND status = 'open'`,
+      [provider_id, product_id],
+    );
   } finally {
     client.release();
   }

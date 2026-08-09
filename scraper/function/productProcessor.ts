@@ -4,10 +4,12 @@ import { primorScraper } from '../providers/primor';
 import { druniScraper } from '../providers/druni';
 import { ScraperFn } from '../utils/types';
 import { Browser, chromium } from '@playwright/test';
+import { UUID } from 'crypto';
 import {AMAZON_PROVIDER_ID,CARREFOUR_PROVIDER_ID, PRIMOR_PROVIDER_ID, DRUNI_PROVIDER_ID, EL_CORTE_INGLES_PROVIDER_ID} from '../utils/providers';
 import { carrefourScraper } from '../providers/carrefour';
 import { elCorteInglesScraper } from '../providers/elCorteIngles';
 import { closeLogger, LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
+import { tryMarkScraperIncidentOpen, tryMarkScraperIncidentResolved } from './scraperIncidents';
 
 const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
 
@@ -18,6 +20,12 @@ const scrapers: Record<number, ScraperFn> = {
   [DRUNI_PROVIDER_ID]: druniScraper,
   [EL_CORTE_INGLES_PROVIDER_ID]: elCorteInglesScraper,
 };
+
+const MAX_SCRAPE_ATTEMPTS = 2;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export async function scrapeAndStoreProductPrice(
   browser:Browser,
@@ -49,6 +57,82 @@ export async function scrapeAndStoreProductPrice(
   return scraper({ context: context, productId: asin, url: url });
 }
 
+export interface ScrapeTarget {
+  ssn: string;
+  provider_id: number;
+  product_id: UUID;
+  url: string;
+}
+
+async function scrapeProductWithRetries(
+  browser: Browser,
+  product: ScrapeTarget,
+): Promise<number> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= MAX_SCRAPE_ATTEMPTS; attempt += 1) {
+    try {
+      return await scrapeAndStoreProductPrice(
+        browser,
+        product.ssn,
+        product.provider_id,
+        product.url,
+      );
+    } catch (error) {
+      lastError = error;
+
+      logger.warn({
+        event: LOG_EVENT.PRODUCT_PROCESSING_FAILED,
+        asin: product.ssn,
+        provider_id: Number(product.provider_id),
+        product_id: product.product_id,
+        attempt,
+        max_attempts: MAX_SCRAPE_ATTEMPTS,
+        error: normalizeLogError(error),
+      }, 'Scrape attempt failed');
+
+      if (attempt < MAX_SCRAPE_ATTEMPTS) {
+        await delay(1000 * attempt);
+      }
+    }
+  }
+
+  await tryMarkScraperIncidentOpen({
+    provider_id: product.provider_id,
+    product_id: product.product_id,
+  });
+
+  throw lastError instanceof Error ? lastError : new Error('Scraper failed after 3 attempts');
+}
+
+export async function processProductWithRetries(
+  browser: Browser,
+  product: ScrapeTarget,
+): Promise<void> {
+  const price = await scrapeProductWithRetries(browser, product);
+
+  await tryMarkScraperIncidentResolved({
+    provider_id: product.provider_id,
+    product_id: product.product_id,
+  });
+
+  await upsertProductPrice({
+    provider_id: product.provider_id,
+    product_id: product.product_id,
+    price,
+    currency: 'EUR',
+  });
+
+  logger.info({
+    event: LOG_EVENT.PRODUCT_PRICE_SAVED,
+    asin: product.ssn,
+    provider_id: Number(product.provider_id),
+    product_id: product.product_id,
+    price,
+    currency: 'EUR',
+  }, 'Product price saved');
+}
+
 async function runFromCli(asin?: string): Promise<void> {
 
   const targetAsin = asin ?? process.argv[2];
@@ -70,27 +154,7 @@ async function runFromCli(asin?: string): Promise<void> {
   });
 
   try{
-    const price = await scrapeAndStoreProductPrice(
-      browser,
-      products.ssn,
-      products.provider_id,
-      products.url,
-    );
-    
-    await upsertProductPrice({
-      provider_id: products.provider_id,
-      product_id: products.product_id,
-      price,
-      currency: 'EUR',
-    });
-    logger.info({
-      event: LOG_EVENT.PRODUCT_PRICE_SAVED,
-      asin: products.ssn,
-      provider_id: Number(products.provider_id),
-      product_id: products.product_id,
-      price,
-      currency: 'EUR',
-    }, 'Product price saved');
+    await processProductWithRetries(browser, products);
   } finally{
     await browser.close()
   }
