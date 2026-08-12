@@ -1,6 +1,6 @@
 import { UUID } from 'crypto';
-import { createOrKeepOpenScraperIncident, findOpenScraperIncident, resolveOpenScraperIncident } from './postgres';
-import { LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
+import { createOrKeepOpenScraperIncident, resolveOpenScraperIncident } from './postgres';
+import { LOG_EVENT, logger } from '../utils/logger';
 
 export async function openScraperIncident(input: {
   provider_id: number;
@@ -8,18 +8,6 @@ export async function openScraperIncident(input: {
   asin: string;
 }): Promise<boolean> {
   const { provider_id, product_id, asin } = input;
-
-  const alreadyOpen = await findOpenScraperIncident({ provider_id, product_id });
-
-  if (alreadyOpen) {
-    logger.info({
-      event: LOG_EVENT.SCRAPER_INCIDENT_ALREADY_OPEN,
-      provider_id,
-      product_id,
-      asin,
-    }, 'Scraper incident already open; skipping creation');
-    return false;
-  }
 
   const created = await createOrKeepOpenScraperIncident({ provider_id, product_id });
 
@@ -30,17 +18,16 @@ export async function openScraperIncident(input: {
       product_id,
       asin,
     }, 'Scraper incident opened for provider/product');
-    return true;
+  } else {
+    logger.info({
+      event: LOG_EVENT.SCRAPER_INCIDENT_ALREADY_OPEN,
+      provider_id,
+      product_id,
+      asin,
+    }, 'Scraper incident already open; skipping creation');
   }
 
-  logger.info({
-    event: LOG_EVENT.SCRAPER_INCIDENT_ALREADY_OPEN,
-    provider_id,
-    product_id,
-    asin,
-  }, 'Scraper incident already existed and remained open');
-
-  return false;
+  return created;
 }
 
 export async function closeScraperIncident(input: {
@@ -49,18 +36,6 @@ export async function closeScraperIncident(input: {
   asin: string;
 }): Promise<boolean> {
   const { provider_id, product_id, asin } = input;
-
-  const hasOpenIncident = await findOpenScraperIncident({ provider_id, product_id });
-
-  if (!hasOpenIncident) {
-    logger.info({
-      event: LOG_EVENT.SCRAPER_INCIDENT_NO_OPEN,
-      provider_id,
-      product_id,
-      asin,
-    }, 'No open scraper incident to resolve');
-    return false;
-  }
 
   const resolved = await resolveOpenScraperIncident({ provider_id, product_id });
 
@@ -71,16 +46,14 @@ export async function closeScraperIncident(input: {
       product_id,
       asin,
     }, 'Scraper incident resolved');
-    return true;
+  } else {
+    logger.info({
+      event: LOG_EVENT.SCRAPER_INCIDENT_NO_OPEN,
+      provider_id,
+      product_id,
+      asin,
+    }, 'No open scraper incident to resolve');
   }
 
-  logger.warn({
-    event: LOG_EVENT.SCRAPER_INCIDENT_NO_OPEN,
-    provider_id,
-    product_id,
-    asin,
-    error: normalizeLogError(new Error('Open incident disappeared before update')),
-  }, 'Open scraper incident could not be resolved');
-
-  return false;
+  return resolved;
 }

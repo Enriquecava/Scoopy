@@ -112,28 +112,6 @@ export async function upsertProductPrice(
   }
 }
 
-export async function findOpenScraperIncident(input: {
-  provider_id: number;
-  product_id: UUID;
-}): Promise<boolean> {
-  const { provider_id, product_id } = input;
-  const client = await pool.connect();
-
-  try {
-    const result = await client.query<{ id: string }>(
-      `SELECT id
-       FROM scraper_incidents
-       WHERE provider_id = $1 AND product_id = $2 AND status = 'open'
-       LIMIT 1;`,
-      [provider_id, product_id],
-    );
-
-    return (result.rowCount ?? 0) > 0;
-  } finally {
-    client.release();
-  }
-}
-
 export async function createOrKeepOpenScraperIncident(input: {
   provider_id: number;
   product_id: UUID;
