@@ -120,28 +120,16 @@ export async function createOrKeepOpenScraperIncident(input: {
   const client = await pool.connect();
 
   try {
-    const existing = await client.query<{ id: string }>(
-      `SELECT id
-       FROM scraper_incidents
-       WHERE provider_id = $1 AND product_id = $2 AND status = 'open'
-       LIMIT 1;`,
-      [provider_id, product_id],
-    );
-
-    if ((existing.rowCount ?? 0) > 0) {
-      return false;
-    }
-
-    await client.query(
+    const result = await client.query<{ id: string }>(
       `INSERT INTO scraper_incidents (provider_id, product_id, status, created_at, updated_at)
        VALUES ($1, $2, 'open', NOW(), NOW())
-       ON CONFLICT (provider_id, product_id)
-       DO UPDATE SET status = 'open', updated_at = NOW()
-       WHERE scraper_incidents.status = 'resolved';`,
+       ON CONFLICT (provider_id, product_id) WHERE status = 'open'
+       DO NOTHING
+       RETURNING id;`,
       [provider_id, product_id],
     );
 
-    return true;
+    return (result.rowCount ?? 0) > 0;
   } finally {
     client.release();
   }
