@@ -14,6 +14,10 @@ export const LOG_EVENT = {
   PRODUCT_NOT_FOUND: 'scraper.product.not_found',
   UNSUPPORTED_PROVIDER: 'scraper.provider.unsupported',
   CLI_RUN_FAILED: 'scraper.cli.failed',
+  SCRAPER_INCIDENT_OPENED: 'scraper.incident.opened',
+  SCRAPER_INCIDENT_ALREADY_OPEN: 'scraper.incident.already_open',
+  SCRAPER_INCIDENT_RESOLVED: 'scraper.incident.resolved',
+  SCRAPER_INCIDENT_NO_OPEN: 'scraper.incident.no_open',
 } as const;
 
 export function normalizeLogError(error: unknown): Record<string, unknown> {

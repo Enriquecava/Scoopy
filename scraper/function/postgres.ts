@@ -111,3 +111,48 @@ export async function upsertProductPrice(
     client.release();
   }
 }
+
+export async function createOrKeepOpenScraperIncident(input: {
+  provider_id: number;
+  product_id: UUID;
+}): Promise<boolean> {
+  const { provider_id, product_id } = input;
+  const client = await pool.connect();
+
+  try {
+    const result = await client.query<{ id: string }>(
+      `INSERT INTO scraper_incidents (provider_id, product_id, status, created_at, updated_at)
+       VALUES ($1, $2, 'open', NOW(), NOW())
+       ON CONFLICT (provider_id, product_id) WHERE status = 'open'
+       DO NOTHING
+       RETURNING id;`,
+      [provider_id, product_id],
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  } finally {
+    client.release();
+  }
+}
+
+export async function resolveOpenScraperIncident(input: {
+  provider_id: number;
+  product_id: UUID;
+}): Promise<boolean> {
+  const { provider_id, product_id } = input;
+  const client = await pool.connect();
+
+  try {
+    const result = await client.query<{ id: string }>(
+      `UPDATE scraper_incidents
+       SET status = 'resolved', updated_at = NOW()
+       WHERE provider_id = $1 AND product_id = $2 AND status = 'open'
+       RETURNING id;`,
+      [provider_id, product_id],
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  } finally {
+    client.release();
+  }
+}

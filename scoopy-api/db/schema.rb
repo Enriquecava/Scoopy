@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_29_094340) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_12_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -54,6 +54,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_29_094340) do
     t.index ["provider_id"], name: "index_providers_products_on_provider_id"
   end
 
+  create_table "scraper_incidents", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "product_id", null: false
+    t.bigint "provider_id", null: false
+    t.string "status", default: "open", null: false
+    t.datetime "updated_at", null: false
+    t.index ["product_id"], name: "index_scraper_incidents_on_product_id"
+    t.index ["provider_id", "product_id"], name: "index_scraper_incidents_on_open_provider_and_product", unique: true, where: "((status)::text = 'open'::text)"
+    t.index ["provider_id"], name: "index_scraper_incidents_on_provider_id"
+    t.check_constraint "status::text = ANY (ARRAY['open'::character varying, 'resolved'::character varying]::text[])", name: "scraper_incidents_status_check"
+  end
+
   create_table "users", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "email", default: "", null: false
@@ -70,4 +82,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_29_094340) do
   add_foreign_key "price_histories", "providers", column: "providers_id"
   add_foreign_key "providers_products", "products"
   add_foreign_key "providers_products", "providers"
+  add_foreign_key "scraper_incidents", "products"
+  add_foreign_key "scraper_incidents", "providers"
 end

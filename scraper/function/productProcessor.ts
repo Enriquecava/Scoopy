@@ -1,15 +1,18 @@
 import { getProductsBySSN, upsertProductPrice } from './postgres';
+import { closeScraperIncident, openScraperIncident } from './incidents';
 import { amazonScraper } from '../providers/amazon';
 import { primorScraper } from '../providers/primor';
 import { druniScraper } from '../providers/druni';
 import { ScraperFn } from '../utils/types';
 import { Browser, chromium } from '@playwright/test';
+import { UUID } from 'crypto';
 import {AMAZON_PROVIDER_ID,CARREFOUR_PROVIDER_ID, PRIMOR_PROVIDER_ID, DRUNI_PROVIDER_ID, EL_CORTE_INGLES_PROVIDER_ID} from '../utils/providers';
 import { carrefourScraper } from '../providers/carrefour';
 import { elCorteInglesScraper } from '../providers/elCorteIngles';
 import { closeLogger, LOG_EVENT, logger, normalizeLogError } from '../utils/logger';
 
 const headless = process.env.PLAYWRIGHTHEADLESS === 'True' ? true : false;
+const MAX_SCRAPER_RETRIES = 3;
 
 const scrapers: Record<number, ScraperFn> = {
   [AMAZON_PROVIDER_ID]: amazonScraper,
@@ -23,6 +26,7 @@ export async function scrapeAndStoreProductPrice(
   browser:Browser,
   asin: string,
   provider_id: number,
+  product_id: UUID,
   url: string,
 ): Promise<number> {
   if (!asin || asin.trim() === '') {
@@ -46,7 +50,34 @@ export async function scrapeAndStoreProductPrice(
       get: () => false,
     })
   })
-  return scraper({ context: context, productId: asin, url: url });
+
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MAX_SCRAPER_RETRIES; attempt += 1) {
+    try {
+      const price = await scraper({ context: context, productId: asin, url: url });
+      await closeScraperIncident({ provider_id, product_id, asin });
+      return price;
+    } catch (error) {
+      lastError = error;
+      logger.warn({
+        event: LOG_EVENT.PROVIDER_SCRAPE_FAILED,
+        asin,
+        provider_id,
+        product_id,
+        attempt,
+        maxAttempts: MAX_SCRAPER_RETRIES,
+        error: normalizeLogError(error),
+      }, `Provider scraper failed on attempt ${attempt}/${MAX_SCRAPER_RETRIES}`);
+
+      if (attempt === MAX_SCRAPER_RETRIES) {
+        await openScraperIncident({ provider_id, product_id, asin });
+        throw error;
+      }
+    }
+  }
+
+  throw lastError ?? new Error(`Provider scraper failed for ${asin}`);
 }
 
 async function runFromCli(asin?: string): Promise<void> {
@@ -74,6 +105,7 @@ async function runFromCli(asin?: string): Promise<void> {
       browser,
       products.ssn,
       products.provider_id,
+      products.product_id,
       products.url,
     );
     

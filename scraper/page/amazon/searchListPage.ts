@@ -14,7 +14,7 @@ export class SearchListPage {
   }
 
   async priceItem(asin: string): Promise<string> {
-    const itemLocator = this.item(asin);
+    const itemLocator = this.item(asin).first();
     const price = await itemLocator.locator('span[data-a-size="xl"][data-a-color="base"].a-price').textContent();
 
     if (price === null) {
