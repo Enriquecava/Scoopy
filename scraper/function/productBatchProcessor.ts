@@ -21,6 +21,7 @@ export async function processProductsFromDatabase(): Promise<void> {
           browser,
           ssn,
           provider_id,
+          product_id,
           url,
         );
         await upsertProductPrice({
