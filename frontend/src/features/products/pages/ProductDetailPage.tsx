@@ -186,6 +186,22 @@ export function ProductDetailPage() {
     return latestEntry ? formatDate(latestEntry.created_at, locale) : null
   }, [locale, priceHistory])
 
+  const latestPriceByProvider = useMemo(() => {
+    const prices = new Map<string, PriceHistoryItem>()
+
+    ;[...priceHistory]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .forEach((entry) => {
+        const providerName = entry.provider_name ?? t('products.detail.provider')
+
+        if (!prices.has(providerName)) {
+          prices.set(providerName, entry)
+        }
+      })
+
+    return prices
+  }, [priceHistory, t])
+
   const chartPoints = useMemo(() => {
     const groupedEntries = new Map<string, { entry: PriceHistoryItem; numericPrice: number }>()
 
@@ -310,17 +326,31 @@ export function ProductDetailPage() {
                 <h3 className="text-lg font-semibold">{t('products.detail.providers')}</h3>
                 <div className="mt-4 space-y-3">
                   {(product.providers_products ?? []).length > 0 ? (
-                    (product.providers_products ?? []).map((provider) => (
-                      <article key={provider.id} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="font-medium text-slate-100">{provider.provider_name ?? t('products.detail.provider')}</p>
-                            <p className="text-sm text-slate-400">SSN: {provider.ssn ?? 'N/A'}</p>
+                    (product.providers_products ?? []).map((provider) => {
+                      const providerName = provider.provider_name ?? t('products.detail.provider')
+                      const latestPrice = latestPriceByProvider.get(providerName)
+                      const numericPrice = latestPrice ? Number.parseFloat(String(latestPrice.price)) : Number.NaN
+
+                      return (
+                        <article key={provider.id} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="font-medium text-slate-100">{providerName}</p>
+                              <p className="text-sm text-slate-400">SSN: {provider.ssn ?? 'N/A'}</p>
+                            </div>
+                            <span className="rounded-full bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-300">{t('products.detail.active')}</span>
                           </div>
-                          <span className="rounded-full bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-300">{t('products.detail.active')}</span>
-                        </div>
-                      </article>
-                    ))
+                          <p className="mt-3 text-sm text-slate-400">
+                            {t('products.detail.latestPrice')}:{' '}
+                            <span className="font-medium text-slate-100">
+                              {latestPrice && Number.isFinite(numericPrice)
+                                ? formatCurrency(numericPrice, locale, latestPrice.currency ?? 'EUR')
+                                : t('products.detail.noPrice')}
+                            </span>
+                          </p>
+                        </article>
+                      )
+                    })
                   ) : (
                     <p className="text-sm text-slate-400">{t('products.detail.noProviders')}</p>
                   )}
