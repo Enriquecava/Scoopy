@@ -8,6 +8,7 @@ This service provides:
 - Product CRUD
 - Product search by name
 - Product price history retrieval
+- Product scraper incidents retrieval
 
 ## Why Rails + Devise JWT
 
@@ -37,6 +38,7 @@ scoopy-api/
       provider.rb
       providers_product.rb
       price_history.rb
+      scraper_incident.rb
       jwt_denylist.rb
     serializers/
       user_serializer.rb
@@ -201,6 +203,7 @@ Defined in `config/routes.rb`:
 - `PUT /products/:id`
 - `DELETE /products/:id`
 - `GET /products/:id/price_history`
+- `GET /products/:id/incidents`
 
 ## Product Endpoints
 
@@ -318,12 +321,31 @@ Returns product identity and sorted history (newest first):
 }
 ```
 
+### GET /products/:id/incidents
+
+Returns open scraper incidents for the product (newest first):
+
+```json
+[
+  {
+    "id": 1,
+    "product_id": "6557acf5-4087-4e67-afe5-6ec343ba4ad4",
+    "provider_id": 1,
+    "status": "open",
+    "created_at": "2026-08-08T10:00:00.000Z",
+    "updated_at": "2026-08-08T10:00:00.000Z",
+    "provider_name": "Provider A"
+  }
+]
+```
+
 ## Data Model Summary
 
 - `Product` has many `providers_products` and `price_histories`.
 - `Provider` has many `providers_products`.
 - `ProvidersProduct` belongs to `product` and `provider`.
-- `PriceHistory` belongs to `product` and `provider` (foreign key `providers_id`).
+- `PriceHistory` belongs to `product` and `provider` (foreign key `provider_id`).
+- `ScraperIncident` belongs to `product` and `provider`; tracks scraper health per pair with `status` (`open`/`resolved`).
 - `User` authenticates with Devise JWT and uses `JwtDenylist` for revocation.
 
 ## Example Authenticated Requests
