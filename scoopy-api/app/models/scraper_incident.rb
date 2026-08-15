@@ -8,5 +8,9 @@ class ScraperIncident < ApplicationRecord
     resolved: 'resolved'
   }
 
+  def provider_name
+    provider&.name
+  end
+
   validates :status, inclusion: { in: statuses.keys }
 end
