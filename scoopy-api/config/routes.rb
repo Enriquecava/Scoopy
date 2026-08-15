@@ -5,9 +5,10 @@ Rails.application.routes.draw do
              sessions: "users/sessions",
              registrations: "users/registrations"
            }
-  resources :products, defaults: { format: :json }  do
+  resources :products, defaults: { format: :json } do
     member do
       get :price_history
+      get :incidents
     end
   end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html

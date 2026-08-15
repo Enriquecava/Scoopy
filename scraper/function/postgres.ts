@@ -98,7 +98,7 @@ export async function upsertProductPrice(
     await client.query('BEGIN');
 
     await client.query(
-      `INSERT INTO price_histories (providers_id, product_id, price, currency, updated_at, created_at)
+      `INSERT INTO price_histories (provider_id, product_id, price, currency, updated_at, created_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [provider_id, product_id, price, currency, updated_at, created_at],
     );

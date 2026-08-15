@@ -25,10 +25,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_12_000003) do
     t.string "currency", limit: 3, null: false
     t.decimal "price", null: false
     t.uuid "product_id", null: false
-    t.bigint "providers_id", null: false
+    t.bigint "provider_id", null: false
     t.datetime "updated_at", null: false
     t.index ["product_id"], name: "index_price_histories_on_product_id"
-    t.index ["providers_id"], name: "index_price_histories_on_providers_id"
+    t.index ["provider_id"], name: "index_price_histories_on_provider_id"
   end
 
   create_table "products", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -79,7 +79,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_12_000003) do
   end
 
   add_foreign_key "price_histories", "products"
-  add_foreign_key "price_histories", "providers", column: "providers_id"
+  add_foreign_key "price_histories", "providers"
   add_foreign_key "providers_products", "products"
   add_foreign_key "providers_products", "providers"
   add_foreign_key "scraper_incidents", "products"

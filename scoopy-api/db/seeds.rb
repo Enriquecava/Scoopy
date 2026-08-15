@@ -1,20 +1,28 @@
-# This file should ensure the existence of records required to run the application in every environment (production,
-# development, test). The code here should be idempotent so that it can be executed at any point in every environment.
-# The data can then be loaded with the bin/rails db:seed command (or created alongside the database with db:setup).
-#
-# Example:
-#
-#   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
-#     MovieGenre.find_or_create_by!(name: genre_name)
-#   end
+# Seed only for production. This creates the base provider catalog required
+# by the scraper and avoids inserting development-only test data.
+return unless Rails.env.production? || Rails.env.development?
+
+providers = [
+  { id: 1, name: "Amazon", url: "https://www.amazon.es/" },
+  { id: 2, name: "Carrefour", url: "https://www.carrefour.es/" },
+  { id: 3, name: "Primor", url: "https://www.primor.eu/es_es/" },
+  { id: 4, name: "Druni", url: "https://www.druni.es/" },
+  { id: 5, name: "El corte ingles", url: "https://www.elcorteingles.es/" }
+]
+
+providers.each do |provider_data|
+  provider = Provider.find_or_initialize_by(id: provider_data[:id])
+  provider.name = provider_data[:name]
+  provider.url = provider_data[:url]
+  provider.save!
+end
 return unless Rails.env.development?
 
 product = Product.find_or_create_by!(name: "test")
-provider = Provider.find_or_create_by!(name: "Amazon", url: "https://www.amazon.es")
-ProvidersProduct.find_or_create_by!(product: product, provider: provider) do |record|
+ProvidersProduct.find_or_create_by!(product: product, provider_id: 1) do |record|
   record.ssn = "test123"
 end
-PriceHistory.find_or_create_by!(product: product, provider: provider) do |record|
+PriceHistory.find_or_create_by!(product: product, provider_id: 1) do |record|
   record.price = 10.0
   record.currency = "EUR"
 end

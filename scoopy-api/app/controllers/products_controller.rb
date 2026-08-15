@@ -1,5 +1,5 @@
 class ProductsController < ApplicationController
-  before_action :set_product, only: %i[ show update destroy price_history ]
+  before_action :set_product, only: %i[ show update destroy price_history incidents ]
   before_action :authenticate_user!
 
   # GET /products
@@ -89,7 +89,21 @@ class ProductsController < ApplicationController
     }
   end
 
-  
+  # GET /products/1/incidents
+  def incidents
+    incidents = @product.scraper_incidents
+      .includes(:provider)
+      .where(status: :open)
+      .order(created_at: :desc)
+      .map do |incident|
+        incident.as_json(
+          only: %i[id product_id provider_id status created_at updated_at],
+          methods: [:provider_name]
+        )
+      end
+
+    render json: incidents
+  end
 
   private
     # Use callbacks to share common setup or constraints between actions.
