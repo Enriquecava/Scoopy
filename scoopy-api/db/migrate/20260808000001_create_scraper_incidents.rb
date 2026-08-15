@@ -8,6 +8,6 @@ class CreateScraperIncidents < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :scraper_incidents, [:provider_id, :product_id], unique: true
+    add_index :scraper_incidents, [:provider_id, :product_id], unique: true, if_not_exists: true
   end
 end
