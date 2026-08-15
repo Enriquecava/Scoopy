@@ -7,6 +7,5 @@ class CreateProvidersProducts < ActiveRecord::Migration[8.1]
 
       t.timestamps
     end
-     add_index :providers_products, [:product_id, :provider_id], unique: true
   end
 end
