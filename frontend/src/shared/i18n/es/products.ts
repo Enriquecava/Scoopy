@@ -13,6 +13,8 @@ export const products = {
     providers: 'Proveedores',
     provider: 'Proveedor',
     active: 'Activo',
+    latestPrice: 'Último precio',
+    noPrice: 'Sin precios registrados',
     noProviders: 'No hay proveedores asociados.',
     priceHistory: 'Historial de precios',
     dailyMinimum: 'Precio mínimo diario',
