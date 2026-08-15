@@ -63,7 +63,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_12_000003) do
     t.index ["product_id"], name: "index_scraper_incidents_on_product_id"
     t.index ["provider_id", "product_id"], name: "index_scraper_incidents_on_open_provider_and_product", unique: true, where: "((status)::text = 'open'::text)"
     t.index ["provider_id"], name: "index_scraper_incidents_on_provider_id"
-    t.check_constraint "status::text = ANY (ARRAY['open'::character varying, 'resolved'::character varying]::text[])", name: "scraper_incidents_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['open'::character varying::text, 'resolved'::character varying::text])", name: "scraper_incidents_status_check"
   end
 
   create_table "users", force: :cascade do |t|
