@@ -7,6 +7,7 @@ import { useTranslation } from '../../../shared/i18n'
 
 type ProviderProduct = {
   id: string | number
+  provider_id: string | number
   ssn: string | null
   provider_name: string | null
 }
@@ -28,6 +29,12 @@ type PriceHistoryPayload = {
   id: string | number
   name: string
   price_history: PriceHistoryItem[]
+}
+
+type ScraperIncident = {
+  provider_id: string | number
+  provider_name: string | null
+  created_at: string
 }
 
 type ChartPoint = {
@@ -106,6 +113,7 @@ function formatDate(value: string, locale: string) {
   return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
+    timeZone: 'UTC',
   }).format(date)
 }
 
@@ -118,6 +126,7 @@ function formatShortDate(value: string, locale: string) {
   return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
+    timeZone: 'UTC',
   }).format(date)
 }
 
@@ -136,6 +145,7 @@ export function ProductDetailPage() {
   const { t, locale } = useTranslation()
   const [product, setProduct] = useState<ProductDetail | null>(null)
   const [priceHistory, setPriceHistory] = useState<PriceHistoryItem[]>([])
+  const [scraperIncidents, setScraperIncidents] = useState<ScraperIncident[]>([])
   const [activePoint, setActivePoint] = useState<ChartPoint | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -154,9 +164,10 @@ export function ProductDetailPage() {
 
     const loadProductDetail = async () => {
       try {
-        const [productResponse, historyResponse] = await Promise.all([
+        const [productResponse, historyResponse, incidentsResponse] = await Promise.all([
           apiClient.get(`/products/${id}`),
           apiClient.get(`/products/${id}/price_history`),
+          apiClient.get(`/products/${id}/incidents`),
         ])
 
         const productPayload = productResponse.data as ProductDetail
@@ -164,6 +175,7 @@ export function ProductDetailPage() {
 
         setProduct(productPayload)
         setPriceHistory(Array.isArray(historyPayload.price_history) ? historyPayload.price_history : [])
+        setScraperIncidents(Array.isArray(incidentsResponse.data) ? incidentsResponse.data : [])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo cargar el producto.')
       } finally {
@@ -328,8 +340,12 @@ export function ProductDetailPage() {
                   {(product.providers_products ?? []).length > 0 ? (
                     (product.providers_products ?? []).map((provider) => {
                       const providerName = provider.provider_name ?? t('products.detail.provider')
+                      const incident = scraperIncidents.find(
+                        (item) => String(item.provider_id) === String(provider.provider_id),
+                      )
                       const latestPrice = latestPriceByProvider.get(providerName)
                       const numericPrice = latestPrice ? Number.parseFloat(String(latestPrice.price)) : Number.NaN
+                      const isActive = !incident
 
                       return (
                         <article key={provider.id} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
@@ -338,14 +354,31 @@ export function ProductDetailPage() {
                               <p className="font-medium text-slate-100">{providerName}</p>
                               <p className="text-sm text-slate-400">SSN: {provider.ssn ?? 'N/A'}</p>
                             </div>
-                            <span className="rounded-full bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-300">{t('products.detail.active')}</span>
+                            <span
+                              className={`group relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
+                                isActive ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'
+                              }`}
+                            >
+                              <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                              {isActive ? t('products.detail.active') : t('products.detail.inactive')}
+                              {incident ? (
+                                <span className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-max rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-xs font-normal text-slate-100 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                                  {t('products.detail.incidentSince')}: {formatDate(incident.created_at, locale)}
+                                </span>
+                              ) : null}
+                            </span>
                           </div>
                           <p className="mt-3 text-sm text-slate-400">
                             {t('products.detail.latestPrice')}:{' '}
-                            <span className="font-medium text-slate-100">
-                              {latestPrice && Number.isFinite(numericPrice)
+                            <span className="group relative inline-block font-medium text-slate-100">
+                              {isActive && latestPrice && Number.isFinite(numericPrice)
                                 ? formatCurrency(numericPrice, locale, latestPrice.currency ?? 'EUR')
                                 : t('products.detail.noPrice')}
+                              {isActive && latestPrice ? (
+                                <span className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-max rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-xs font-normal text-slate-100 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                                  {t('products.detail.priceObtainedAt')}: {formatDate(latestPrice.created_at, locale)}
+                                </span>
+                              ) : null}
                             </span>
                           </p>
                         </article>

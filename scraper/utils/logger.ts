@@ -8,6 +8,8 @@ export const LOG_EVENT = {
   PROVIDER_SCRAPE_FAILED: 'scraper.provider.failed',
   PRODUCT_PRICE_SAVED: 'scraper.product.price_saved',
   PRODUCT_PROCESSING_FAILED: 'scraper.product.processing_failed',
+  BATCH_PROCESSING_STARTED: 'scraper.batch.started',
+  BATCH_PROCESSING_COMPLETED: 'scraper.batch.completed',
   BATCH_PROCESSING_FAILED: 'scraper.batch.failed',
   INVALID_PRODUCT_INPUT: 'scraper.input.invalid_product',
   INVALID_CLI_INPUT: 'scraper.input.invalid_cli',

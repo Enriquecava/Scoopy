@@ -28,7 +28,7 @@ class ProductsController < ApplicationController
     render json: @product.as_json(
       include: [
           providers_products: {
-            only: %i[id ssn],
+            only: %i[id ssn provider_id],
             methods: [:provider_name]
           }
       ]
@@ -97,7 +97,7 @@ class ProductsController < ApplicationController
       .order(created_at: :desc)
       .map do |incident|
         incident.as_json(
-          only: %i[id product_id provider_id status created_at updated_at],
+          only: %i[id product_id provider_id status created_at],
           methods: [:provider_name]
         )
       end
