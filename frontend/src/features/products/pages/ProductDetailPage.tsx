@@ -164,10 +164,9 @@ export function ProductDetailPage() {
 
     const loadProductDetail = async () => {
       try {
-        const [productResponse, historyResponse, incidentsResponse] = await Promise.all([
+        const [productResponse, historyResponse] = await Promise.all([
           apiClient.get(`/products/${id}`),
           apiClient.get(`/products/${id}/price_history`),
-          apiClient.get(`/products/${id}/incidents`),
         ])
 
         const productPayload = productResponse.data as ProductDetail
@@ -175,7 +174,13 @@ export function ProductDetailPage() {
 
         setProduct(productPayload)
         setPriceHistory(Array.isArray(historyPayload.price_history) ? historyPayload.price_history : [])
-        setScraperIncidents(Array.isArray(incidentsResponse.data) ? incidentsResponse.data : [])
+
+        try {
+          const incidentsResponse = await apiClient.get(`/products/${id}/incidents`)
+          setScraperIncidents(Array.isArray(incidentsResponse.data) ? incidentsResponse.data : [])
+        } catch {
+          setScraperIncidents([])
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo cargar el producto.')
       } finally {
