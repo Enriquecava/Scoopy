@@ -18,6 +18,7 @@ export const druniScraper: ScraperFn = async ({context,productId,url }) => {
     
     await cookiesPage.clickRejectButton();
     await homePage.searchForReference(productId);
+    await page.waitForTimeout(300)
     const rawPrice = await searchListPage.priceItem();
 
     const price = parsePriceToEuros(rawPrice);

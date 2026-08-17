@@ -4,6 +4,7 @@ import { LoaderCircle, PackageOpen, Search, Sparkles } from 'lucide-react'
 import { apiClient } from '../../../shared/api/client'
 import { useAuth } from '../../../app/providers/AuthProvider'
 import { useTranslation } from '../../../shared/i18n'
+import { AddProductButton } from '../components/AddProductButton'
 
 type Product = {
   id: string | number
@@ -135,7 +136,10 @@ export function ProductsPage() {
       <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-lg shadow-slate-950/30 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.35em] text-cyan-400">{t('products.sectionTitle')}</p>
-          <h2 className="mt-2 text-2xl font-semibold">{t('products.title')}</h2>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h2 className="text-2xl font-semibold">{t('products.title')}</h2>
+            <AddProductButton />
+          </div>
           <p className="mt-2 text-sm text-slate-400">{t('products.subtitle')}</p>
         </div>
 
