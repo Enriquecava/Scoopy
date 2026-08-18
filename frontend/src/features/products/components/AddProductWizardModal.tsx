@@ -1,7 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog'
+import { LoaderCircle } from 'lucide-react'
 import { useTranslation } from '../../../shared/i18n'
 import { useAddProductWizard } from '../hooks/useAddProductWizard'
+import { useAddProductProvidersStep } from '../hooks/useAddProductProvidersStep'
 import { CancelConfirmDialog } from './CancelConfirmDialog'
+import { ProvidersStep } from './ProvidersStep'
 import { StepDots } from './StepDots'
 
 type AddProductWizardModalProps = {
@@ -12,6 +15,7 @@ type AddProductWizardModalProps = {
 export function AddProductWizardModal({ open, onOpenChange }: AddProductWizardModalProps) {
   const { t } = useTranslation()
   const wizard = useAddProductWizard()
+  const providersStep = useAddProductProvidersStep({ active: wizard.step === 2 })
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) {
@@ -25,8 +29,23 @@ export function AddProductWizardModal({ open, onOpenChange }: AddProductWizardMo
   const handleDiscard = () => {
     wizard.dismissCancelConfirm()
     wizard.reset()
+    providersStep.reset()
     onOpenChange(false)
   }
+
+  const handleNext = async () => {
+    if (wizard.step === 2) {
+      const success = await providersStep.submit()
+      if (!success) {
+        return
+      }
+    }
+
+    wizard.goNext()
+  }
+
+  const isNextDisabled =
+    wizard.step === 1 ? !wizard.canGoNext : wizard.step === 2 ? !providersStep.isValid || providersStep.submitting : !wizard.canGoNext
 
   return (
     <>
@@ -34,7 +53,7 @@ export function AddProductWizardModal({ open, onOpenChange }: AddProductWizardMo
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70" />
           <Dialog.Content
-            className="fixed left-1/2 top-1/2 z-40 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-xl shadow-slate-950/40"
+            className="fixed left-1/2 top-1/2 z-40 max-h-[85vh] w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 p-8 shadow-xl shadow-slate-950/40"
             onEscapeKeyDown={(event) => {
               event.preventDefault()
               wizard.requestCancel()
@@ -67,6 +86,8 @@ export function AddProductWizardModal({ open, onOpenChange }: AddProductWizardMo
                   />
                   <p className="mt-2 text-xs text-slate-500">{t('products.addProduct.nameHint')}</p>
                 </div>
+              ) : wizard.step === 2 ? (
+                <ProvidersStep providersStep={providersStep} />
               ) : (
                 <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/40 p-6 text-center">
                   <h3 className="text-sm font-semibold text-slate-200">{t('products.addProduct.stepPlaceholderTitle')}</h3>
@@ -96,10 +117,11 @@ export function AddProductWizardModal({ open, onOpenChange }: AddProductWizardMo
                 ) : null}
                 <button
                   type="button"
-                  onClick={wizard.goNext}
-                  disabled={!wizard.canGoNext}
-                  className="rounded-xl bg-cyan-500/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-500/30 disabled:text-slate-500"
+                  onClick={handleNext}
+                  disabled={isNextDisabled}
+                  className="flex items-center gap-2 rounded-xl bg-cyan-500/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-500/30 disabled:text-slate-500"
                 >
+                  {providersStep.submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                   {t('products.addProduct.next')}
                 </button>
               </div>
