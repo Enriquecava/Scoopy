@@ -14,6 +14,8 @@ import { carrefourVerifier } from '../verifier/carrefour';
 import { druniVerifier } from '../verifier/druni';
 import { elCorteInglesVerifier } from '../verifier/elCorteIngles';
 import { primorVerifier } from '../verifier/primor';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 
 const verifie: Record<number, VerifierFn> = {
   [AMAZON_PROVIDER_ID]: amazonVerifier,
@@ -26,7 +28,7 @@ const verifie: Record<number, VerifierFn> = {
 export async function verifyProductExist(
   provider_id: number,
   ssn: string,
-): Promise<Buffer> {
+): Promise<string> {
   if (!ssn || ssn.trim() === '') {
     logger.warn(
       { event: VERIFIER_LOG_EVENT.INVALID_PRODUCT_INPUT, ssn, provider_id },
@@ -42,6 +44,7 @@ export async function verifyProductExist(
     );
     throw new Error(`Unsupported provider_id: ${provider_id}`);
   }
+
   let browser;
   try {
     browser = await chromium.launch({
@@ -66,37 +69,19 @@ export async function verifyProductExist(
         get: () => false,
       });
     });
-    let url: string | null = null;
-    try{
-      url = await getProviderUrl(provider_id);
-    } catch (error) {
-      logger.error(
-        {
-          event: VERIFIER_LOG_EVENT.FAILED_TO_GET_PROVIDER_URL,
-          provider_id,
-          ssn,
-          error,
-        },
-        'Failed to get provider URL',
-      );
-      throw error;
-    }
-    try {
-      const result = await verifier({ context: context, productId: ssn, url:url});
-      return result;
-    }
-    catch (error) {
-      logger.error(
-        {
-          event: VERIFIER_LOG_EVENT.VERIFICATION_FAILED,
-          provider_id,
-          ssn,
-          error,
-        },
-        'Verification failed',
-      );
-      throw error;
-    }
+
+    const url = await getProviderUrl(provider_id);
+    const result = await verifier({ context, productId: ssn, url });
+
+    const screenshotDir = path.resolve(process.cwd(), 'scraper', 'tmp', 'screenshot');
+    await fs.mkdir(screenshotDir, { recursive: true });
+
+    const sanitizedSsn = String(ssn).trim().replace(/[^a-zA-Z0-9_-]+/g, '_');
+    const fileName = `screenshot_${provider_id}_${sanitizedSsn}_${Date.now()}.png`;
+    const filePath = path.join(screenshotDir, fileName);
+    await fs.writeFile(filePath, result);
+
+    return fileName;
   } catch (error) {
     logger.error(
       {

@@ -1,6 +1,7 @@
 class ProductsController < ApplicationController
   before_action :set_product, only: %i[ show update destroy price_history incidents ]
   before_action :authenticate_user!
+  skip_before_action :authenticate_user!, only: %i[ screenshot ]
 
   # GET /products
   def index
@@ -103,6 +104,42 @@ class ProductsController < ApplicationController
       end
 
     render json: incidents
+  end
+
+  def screenshot
+    filename = params[:filename].to_s
+    screenshot_dir = Rails.root.parent.join("scraper/tmp/screenshot")
+    file_path = screenshot_dir.join(filename)
+
+    if filename.blank? || !file_path.exist? || !file_path.to_s.start_with?(screenshot_dir.to_s)
+      head :not_found
+      return
+    end
+
+    send_file file_path, type: "image/png", disposition: "inline"
+  end
+
+  def verify
+    payload = request.body.read
+    items = payload.present? ? JSON.parse(payload) : []
+
+    if !items.is_a?(Array) || items.empty?
+      render json: { error: "Request must include at least one item" }, status: :bad_request
+      return
+    end
+
+    result = ProductVerificationService.verify_batch(items)
+
+    if result[:meta][:all_failed]
+      render json: result, status: :bad_request
+      return
+    end
+
+    render json: result, status: :ok
+  rescue JSON::ParserError
+    render json: { error: "Invalid JSON payload" }, status: :bad_request
+  rescue ArgumentError => e
+    render json: { error: e.message }, status: :bad_request
   end
 
   private
