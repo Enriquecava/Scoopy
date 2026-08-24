@@ -7,3 +7,4 @@ export type ScraperInput = {
 };
 
 export type ScraperFn = (input: ScraperInput) => Promise<number>;
+export type VerifierFn = (input: ScraperInput) => Promise<Buffer>;

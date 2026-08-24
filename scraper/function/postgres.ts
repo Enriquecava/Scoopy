@@ -79,6 +79,20 @@ export async function getProductsBySSN(ssn: string): Promise<{
     client.release();
   }
 }
+export async function getProviderUrl(provider_id: number): Promise<string | null> {
+  const client = await pool.connect();
+
+  try {
+    const result = await client.query<{ url: string }>(
+      'SELECT url FROM providers WHERE id = $1 LIMIT 1',
+      [provider_id],
+    );
+
+    return result.rows[0]?.url || null;
+  } finally {
+    client.release();
+  }
+}
 
 export async function upsertProductPrice(
   input: UpsertPriceInput,

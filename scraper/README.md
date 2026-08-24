@@ -16,6 +16,14 @@ At a high level, the scraper:
 
 The batch processor can iterate through all products in `providers_products`, while the single-product processor can scrape one product by its SSN and provider mapping.
 
+## Verifier
+
+The scraper also includes a verifier flow that checks whether a product exists in the provider website and returns a screenshot image buffer for visual validation.
+
+Use this guide for verifier details, provider mapping, and manual execution examples:
+
+- [Verifier guide](verifier/README.md)
+
 ## Architecture
 
 ```mermaid
