@@ -89,9 +89,7 @@ class ProductVerificationService
 
       file_name = stdout.strip
       raise StandardError, "Screenshot filename was not returned" if file_name.blank?
-
-      base_url = ENV.fetch("APP_HOST", "http://localhost:3000")
-      "#{base_url}/screenshots/#{file_name}"
+      "/screenshots/#{file_name}"
     end
   end
 end
