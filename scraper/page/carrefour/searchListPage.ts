@@ -3,6 +3,7 @@ import { Page, Locator } from '@playwright/test';
 export class SearchListPage {
   private page: Page;
   readonly item: Locator;
+  readonly product:Locator
 
   constructor(page: Page) {
     this.page = page;
@@ -11,6 +12,14 @@ export class SearchListPage {
 
   async clickItem() {
     await this.item.click();
+  }
+
+  async getItemImage(): Promise<Buffer> {
+    const image = await this.item.locator('xpath=ancestor::article').first().screenshot();
+    if (!image) {
+      throw new Error(`Image not found`);
+    }
+    return image;
   }
 
   async priceItem(): Promise<string> {

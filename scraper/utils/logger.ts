@@ -22,6 +22,15 @@ export const LOG_EVENT = {
   SCRAPER_INCIDENT_NO_OPEN: 'scraper.incident.no_open',
 } as const;
 
+export const VERIFIER_LOG_EVENT = {
+  VERIFICATION_STARTED: 'verifier.verification.started',
+  VERIFICATION_IMAGE_OBTAINED: 'verifier.verification.image_obtained',
+  VERIFICATION_FAILED: 'verifier.verification.failed',
+  FAILED_TO_GET_PROVIDER_URL: 'verifier.provider.failed_to_get_url',
+  INVALID_PRODUCT_INPUT: 'verifier.input.invalid_product',
+  UNSUPPORTED_PROVIDER: 'verifier.provider.unsupported',
+} as const;
+
 export function normalizeLogError(error: unknown): Record<string, unknown> {
   if (error instanceof Error) {
     return {
