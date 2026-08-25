@@ -93,4 +93,16 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :no_content
   end
+
+  test "should reject duplicate provider_ids in the same verification batch" do
+    items = [
+      { provider_id: 1, ssn: "ABC123" },
+      { provider_id: 1, ssn: "XYZ456" }
+    ]
+
+    post verify_products_url, params: items.to_json, headers: @auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "Duplicate provider_id values are not allowed", response.parsed_body["error"]
+  end
 end

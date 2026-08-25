@@ -1,7 +1,6 @@
 class ProductsController < ApplicationController
   before_action :set_product, only: %i[ show update destroy price_history incidents ]
   before_action :authenticate_user!
-  skip_before_action :authenticate_user!, only: %i[ screenshot ]
 
   # GET /products
   def index
@@ -108,23 +107,27 @@ class ProductsController < ApplicationController
 
   def screenshot
     filename = params[:filename].to_s
-    screenshot_dir = Rails.root.parent.join("scraper/tmp/screenshot")
+    return head :not_found if filename.blank? || !filename.match?(/\A[a-f0-9-]{36}\.png\z/)
+
+    screenshot_dir = Rails.root.parent.join("scraper/tmp/screenshot").expand_path
     file_path = screenshot_dir.join(filename)
+    return head :not_found unless file_path.file?
 
-    if filename.blank? || !file_path.exist? || !file_path.to_s.start_with?(screenshot_dir.to_s)
-      head :not_found
-      return
-    end
+    file_realpath = file_path.realpath
+    screenshot_root = screenshot_dir.realpath
+    return head :not_found unless file_realpath.to_s == file_path.to_s || file_realpath.to_s.start_with?("#{screenshot_root}/")
 
-    send_file file_path, type: "image/png", disposition: "inline"
+    send_file file_realpath, type: "image/png", disposition: "inline"
+  rescue Errno::ENOENT
+    head :not_found
   end
 
   def verify
     payload = request.body.read
     items = payload.present? ? JSON.parse(payload) : []
 
-    if !items.is_a?(Array) || items.empty?
-      render json: { error: "Request must include at least one item" }, status: :bad_request
+    if !items.is_a?(Array) || !items.size.between?(1, ProductVerificationService::MAX_BATCH_SIZE)
+      render json: { error: "Request must include between 1 and #{ProductVerificationService::MAX_BATCH_SIZE} items" }, status: :bad_request
       return
     end
 

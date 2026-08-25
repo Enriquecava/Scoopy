@@ -1,13 +1,55 @@
 class ProductVerificationService
+  MAX_BATCH_SIZE = 5
+  SCREENSHOT_TTL = 1.hour
+  SCREENSHOT_DIRECTORY = Rails.root.parent.join("scraper/tmp/screenshot")
+
   class << self
-    SCREENSHOT_TTL = 1.hour
-    SCREENSHOT_DIRECTORY = Rails.root.parent.join("scraper/tmp/screenshot")
-
     def verify_batch(items)
-      raise ArgumentError, "Request must include at least one item" if items.nil? || items.empty?
-      raise ArgumentError, "Request must be an array" unless items.is_a?(Array)
+      raise ArgumentError, "Request must include between 1 and #{MAX_BATCH_SIZE} items" if items.nil? || !items.is_a?(Array) || !items.size.between?(1, MAX_BATCH_SIZE)
 
-      results = items.map do |item|
+      provider_ids = items.filter_map do |item|
+        next if !item.is_a?(Hash)
+
+        provider_id = item["provider_id"] || item[:provider_id]
+        provider_id.presence
+      end
+
+      if provider_ids.length != provider_ids.uniq.length
+        raise ArgumentError, "Duplicate provider_id values are not allowed"
+      end
+
+      threads = items.map do |item|
+        Thread.new do
+          process_item(item)
+        end
+      end
+
+      ordered_results = threads.map(&:value)
+      success_count = ordered_results.count { |result| result[:error].nil? }
+      failed_count = ordered_results.count { |result| !result[:error].nil? }
+
+      {
+        data: ordered_results,
+        meta: {
+          total: ordered_results.size,
+          success: success_count,
+          failed: failed_count,
+          all_failed: success_count.zero?
+        }
+      }
+    end
+
+    private
+
+    def process_item(item)
+      unless item.is_a?(Hash)
+        {
+          provider_id: nil,
+          ssn: nil,
+          screenshot: nil,
+          error: "provider_id and ssn are required"
+        }
+      else
         provider_id = item["provider_id"] || item[:provider_id]
         ssn = item["ssn"] || item[:ssn]
 
@@ -20,6 +62,10 @@ class ProductVerificationService
           }
         else
           begin
+            provider_id = Integer(provider_id)
+            ssn = ssn.to_s.strip
+            raise ArgumentError, "Invalid ssn" unless ssn.length.between?(1, 200)
+
             screenshot_url = verify_product(provider_id, ssn)
             {
               provider_id: provider_id,
@@ -28,31 +74,17 @@ class ProductVerificationService
               error: nil
             }
           rescue StandardError => e
+            Rails.logger.error("Verification failed for provider=#{provider_id.inspect} ssn=#{ssn.inspect}: #{e.class}: #{e.message}")
             {
               provider_id: provider_id,
               ssn: ssn,
               screenshot: nil,
-              error: e.message
+              error: "verification_failed"
             }
           end
         end
       end
-
-      success_count = results.count { |result| result[:error].nil? }
-      failed_count = results.count { |result| !result[:error].nil? }
-
-      {
-        data: results,
-        meta: {
-          total: results.size,
-          success: success_count,
-          failed: failed_count,
-          all_failed: success_count.zero?
-        }
-      }
     end
-
-    private
 
     def cleanup_expired_screenshots
       return unless SCREENSHOT_DIRECTORY.exist?
@@ -72,8 +104,8 @@ class ProductVerificationService
       script = <<~JS
         (async () => {
           const { verifyProductExist } = await import('./scraper/function/verifier.ts');
-          const fileName = await verifyProductExist(#{provider_id}, #{JSON.generate(ssn)});
-          process.stdout.write(fileName);
+          const result = await verifyProductExist(#{provider_id}, #{JSON.generate(ssn)});
+          process.stdout.write(JSON.stringify({ file_name: result }));
         })();
       JS
 
@@ -87,9 +119,16 @@ class ProductVerificationService
 
       raise StandardError, stderr.strip unless status.success?
 
-      file_name = stdout.strip
-      raise StandardError, "Screenshot filename was not returned" if file_name.blank?
+      payload = JSON.parse(stdout)
+      file_name = payload.fetch("file_name").to_s
+      raise StandardError, "Invalid screenshot filename returned by verifier" unless file_name.match?(/\A[a-f0-9-]{36}\.png\z/)
+
+      file_path = SCREENSHOT_DIRECTORY.join(file_name)
+      raise StandardError, "Screenshot file was not created" unless file_path.file?
+
       "/screenshots/#{file_name}"
+    rescue JSON::ParserError
+      raise StandardError, "Invalid screenshot payload returned by verifier"
     end
   end
 end

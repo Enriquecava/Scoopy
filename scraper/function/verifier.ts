@@ -16,6 +16,7 @@ import { elCorteInglesVerifier } from '../verifier/elCorteIngles';
 import { primorVerifier } from '../verifier/primor';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const verifie: Record<number, VerifierFn> = {
   [AMAZON_PROVIDER_ID]: amazonVerifier,
@@ -76,8 +77,7 @@ export async function verifyProductExist(
     const screenshotDir = path.resolve(process.cwd(), 'scraper', 'tmp', 'screenshot');
     await fs.mkdir(screenshotDir, { recursive: true });
 
-    const sanitizedSsn = String(ssn).trim().replace(/[^a-zA-Z0-9_-]+/g, '_');
-    const fileName = `screenshot_${provider_id}_${sanitizedSsn}_${Date.now()}.png`;
+    const fileName = `${crypto.randomUUID()}.png`;
     const filePath = path.join(screenshotDir, fileName);
     await fs.writeFile(filePath, result);
 
