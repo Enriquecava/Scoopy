@@ -71,7 +71,22 @@ export async function verifyProductExist(
       });
     });
 
-    const url = await getProviderUrl(provider_id);
+    let url: string | null = null;
+    try {
+      url = await getProviderUrl(provider_id);
+    } catch (error) {
+      logger.error(
+        {
+          event: VERIFIER_LOG_EVENT.FAILED_TO_GET_PROVIDER_URL,
+          provider_id,
+          ssn,
+          error,
+        },
+        'Failed to get provider URL',
+      );
+      throw error;
+    }
+
     const result = await verifier({ context, productId: ssn, url });
 
     const screenshotDir = path.resolve(process.cwd(), 'scraper', 'tmp', 'screenshot');

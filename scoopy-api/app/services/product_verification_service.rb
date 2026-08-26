@@ -3,8 +3,6 @@ require "timeout"
 class ProductVerificationService
   MAX_BATCH_SIZE = 5
   PROCESS_TIMEOUT_SECONDS = 30
-  SCREENSHOT_TTL = 1.hour
-  SCREENSHOT_DIRECTORY = Rails.root.parent.join("scraper/tmp/screenshot")
 
   class << self
     def verify_batch(items)
@@ -99,20 +97,10 @@ class ProductVerificationService
       end
     end
 
-    def cleanup_expired_screenshots
-      return unless SCREENSHOT_DIRECTORY.exist?
-
-      Dir.glob(SCREENSHOT_DIRECTORY.join("*.png")).each do |file_path|
-        File.delete(file_path) if File.mtime(file_path) < SCREENSHOT_TTL.ago
-      rescue Errno::ENOENT
-        next
-      end
-    end
-
     def verify_product(provider_id, ssn)
       require "open3"
 
-      cleanup_expired_screenshots
+      TemporaryScreenshotService.cleanup_expired
 
       script = <<~JS
         (async () => {
@@ -131,8 +119,10 @@ class ProductVerificationService
         Timeout.timeout(PROCESS_TIMEOUT_SECONDS) do
           Open3.popen3("npx", "tsx", "--eval", script, chdir: Rails.root.parent.to_s) do |_stdin, stdout_io, stderr_io, wait_thr|
             pid = wait_thr.pid
-            stdout = stdout_io.read
-            stderr = stderr_io.read
+            stdout_reader = Thread.new { stdout_io.read }
+            stderr_reader = Thread.new { stderr_io.read }
+            stdout = stdout_reader.value
+            stderr = stderr_reader.value
             status = wait_thr.value
           end
         end
@@ -151,7 +141,7 @@ class ProductVerificationService
       file_name = payload.fetch("file_name").to_s
       raise StandardError, "Invalid screenshot filename returned by verifier" unless file_name.match?(/\A[a-f0-9-]{36}\.png\z/)
 
-      file_path = SCREENSHOT_DIRECTORY.join(file_name)
+      file_path = TemporaryScreenshotService::DIRECTORY.join(file_name)
       raise StandardError, "Screenshot file was not created" unless file_path.file?
 
       "/screenshots/#{file_name}"
