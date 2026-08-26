@@ -117,7 +117,7 @@ class ProductVerificationService
 
       begin
         Timeout.timeout(PROCESS_TIMEOUT_SECONDS) do
-          Open3.popen3("npx", "tsx", "--eval", script, chdir: Rails.root.parent.to_s) do |_stdin, stdout_io, stderr_io, wait_thr|
+          Open3.popen3("npx", "--no-install", "tsx", "--eval", script, chdir: Rails.root.parent.to_s) do |_stdin, stdout_io, stderr_io, wait_thr|
             pid = wait_thr.pid
             stdout_reader = Thread.new { stdout_io.read }
             stderr_reader = Thread.new { stderr_io.read }
