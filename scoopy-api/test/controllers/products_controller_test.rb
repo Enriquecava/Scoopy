@@ -92,9 +92,9 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should reject invalid screenshot filenames with 404" do
-    get "/screenshots/not-valid.png", as: :json
+    get "/screenshots/not-valid.png", headers: @auth_headers, as: :json
 
-    assert_response :unauthorized
+    assert_response :not_found
   end
 
   test "should require authentication to access screenshots" do
