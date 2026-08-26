@@ -2,7 +2,7 @@ require "timeout"
 
 class ProductVerificationService
   MAX_BATCH_SIZE = 5
-  PROCESS_TIMEOUT_SECONDS = 10
+  PROCESS_TIMEOUT_SECONDS = 30
   SCREENSHOT_TTL = 1.hour
   SCREENSHOT_DIRECTORY = Rails.root.parent.join("scraper/tmp/screenshot")
 
@@ -116,9 +116,8 @@ class ProductVerificationService
 
       script = <<~JS
         (async () => {
-          const { verifyProductExist, persistVerificationScreenshot } = await import('./scraper/function/verifier.ts');
-          const screenshotBuffer = await verifyProductExist(#{provider_id}, #{JSON.generate(ssn)});
-          const fileName = await persistVerificationScreenshot(screenshotBuffer, #{provider_id}, #{JSON.generate(ssn)});
+          const { verifyProductExist } = await import('./scraper/function/verifier.ts');
+          const fileName = await verifyProductExist(#{provider_id}, #{JSON.generate(ssn)});
           process.stdout.write(JSON.stringify({ file_name: fileName }));
         })();
       JS
@@ -138,7 +137,11 @@ class ProductVerificationService
           end
         end
       rescue Timeout::Error
-        Process.kill("TERM", pid) if pid
+        begin
+          Process.kill("TERM", pid) if pid
+        rescue Errno::ESRCH
+          # Process already terminated
+        end
         raise StandardError, "Verification timed out"
       end
 
