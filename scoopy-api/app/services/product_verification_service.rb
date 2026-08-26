@@ -1,5 +1,8 @@
+require "timeout"
+
 class ProductVerificationService
   MAX_BATCH_SIZE = 5
+  PROCESS_TIMEOUT_SECONDS = 10
   SCREENSHOT_TTL = 1.hour
   SCREENSHOT_DIRECTORY = Rails.root.parent.join("scraper/tmp/screenshot")
 
@@ -8,10 +11,10 @@ class ProductVerificationService
       raise ArgumentError, "Request must include between 1 and #{MAX_BATCH_SIZE} items" if items.nil? || !items.is_a?(Array) || !items.size.between?(1, MAX_BATCH_SIZE)
 
       provider_ids = items.filter_map do |item|
-        next if !item.is_a?(Hash)
+        next unless item.is_a?(Hash)
 
-        provider_id = item["provider_id"] || item[:provider_id]
-        provider_id.presence
+        provider_id = normalize_provider_id(item["provider_id"] || item[:provider_id])
+        provider_id if provider_id.present?
       end
 
       if provider_ids.length != provider_ids.uniq.length
@@ -20,7 +23,9 @@ class ProductVerificationService
 
       threads = items.map do |item|
         Thread.new do
-          process_item(item)
+          Rails.application.executor.wrap do
+            process_item(item)
+          end
         end
       end
 
@@ -40,6 +45,14 @@ class ProductVerificationService
     end
 
     private
+
+    def normalize_provider_id(value)
+      return nil if value.blank?
+
+      Integer(value.to_s.strip)
+    rescue ArgumentError, TypeError
+      value.to_s.strip
+    end
 
     def process_item(item)
       unless item.is_a?(Hash)
@@ -103,21 +116,33 @@ class ProductVerificationService
 
       script = <<~JS
         (async () => {
-          const { verifyProductExist } = await import('./scraper/function/verifier.ts');
-          const result = await verifyProductExist(#{provider_id}, #{JSON.generate(ssn)});
-          process.stdout.write(JSON.stringify({ file_name: result }));
+          const { verifyProductExist, persistVerificationScreenshot } = await import('./scraper/function/verifier.ts');
+          const screenshotBuffer = await verifyProductExist(#{provider_id}, #{JSON.generate(ssn)});
+          const fileName = await persistVerificationScreenshot(screenshotBuffer, #{provider_id}, #{JSON.generate(ssn)});
+          process.stdout.write(JSON.stringify({ file_name: fileName }));
         })();
       JS
 
-      stdout, stderr, status = Open3.capture3(
-        "npx",
-        "tsx",
-        "--eval",
-        script,
-        chdir: Rails.root.parent.to_s
-      )
+      stdout = nil
+      stderr = nil
+      status = nil
+      pid = nil
 
-      raise StandardError, stderr.strip unless status.success?
+      begin
+        Timeout.timeout(PROCESS_TIMEOUT_SECONDS) do
+          Open3.popen3("npx", "tsx", "--eval", script, chdir: Rails.root.parent.to_s) do |_stdin, stdout_io, stderr_io, wait_thr|
+            pid = wait_thr.pid
+            stdout = stdout_io.read
+            stderr = stderr_io.read
+            status = wait_thr.value
+          end
+        end
+      rescue Timeout::Error
+        Process.kill("TERM", pid) if pid
+        raise StandardError, "Verification timed out"
+      end
+
+      raise StandardError, stderr.to_s.strip unless status.success?
 
       payload = JSON.parse(stdout)
       file_name = payload.fetch("file_name").to_s

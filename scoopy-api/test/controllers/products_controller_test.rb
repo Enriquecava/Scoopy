@@ -61,6 +61,37 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "unsoported parameter", response.parsed_body["error"]
   end
 
+  test "should reject invalid JSON payloads for verification" do
+    post verify_products_url, params: "{not json", headers: @auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "Invalid JSON payload", response.parsed_body["error"]
+  end
+
+  test "should reject verification batches larger than the allowed limit" do
+    items = Array.new(6) { { provider_id: 1, ssn: "ABC123" } }
+
+    post verify_products_url, params: items.to_json, headers: @auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "Request must include between 1 and 5 items", response.parsed_body["error"]
+  end
+
+  test "should return 400 when all verification items fail" do
+    ProductVerificationService.stub(:verify_batch, { data: [], meta: { all_failed: true } }) do
+      post verify_products_url, params: [{ provider_id: 1, ssn: "ABC123" }].to_json, headers: @auth_headers, as: :json
+    end
+
+    assert_response :bad_request
+    assert_equal true, response.parsed_body.dig("meta", "all_failed")
+  end
+
+  test "should reject invalid screenshot filenames with 404" do
+    get "/screenshots/not-valid.png", as: :json
+
+    assert_response :not_found
+  end
+
   test "should create product" do
     assert_difference("Product.count") do
       post products_url, params: { product: { name: @product.name } }, headers: @auth_headers, as: :json

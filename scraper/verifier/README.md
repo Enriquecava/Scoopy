@@ -11,11 +11,11 @@ Input:
 - `ssn` (provider product identifier used by that tenant)
 
 Output:
-- `Promise<Buffer>` with a PNG screenshot of the matched product card/result.
+- `Promise<string>` with the generated PNG filename after the screenshot is persisted to `scraper/tmp/screenshot`.
 
 ## Entry Point
 
-Main function: `verifyProductExist(provider_id: number, ssn: string): Promise<Buffer>`
+Main function: `verifyProductExist(provider_id: number, ssn: string): Promise<string>`
 
 Defined in:
 - `scraper/function/verifier.ts`
@@ -47,8 +47,9 @@ The verifier resolves the provider implementation using these ids:
 4. Creates a browser context with anti-bot oriented defaults (user-agent, headers, webdriver override).
 5. Fetches the provider base URL from PostgreSQL (`providers.url`).
 6. Runs the provider-specific search flow.
-7. Returns the screenshot as a `Buffer`.
-8. Always closes the browser in `finally`.
+7. Captures the screenshot as a PNG buffer.
+8. Persists it under `scraper/tmp/screenshot` and returns the generated filename.
+9. Always closes the browser in `finally`.
 
 ## Environment and Data Requirements
 
@@ -80,13 +81,13 @@ You can persist logs with:
 
 ## Run It Manually
 
-There is currently no dedicated CLI wrapper in `scraper/function/verifier.ts`; the file exports the verifier function. You can execute it from the repository root with `tsx` and write the image to disk:
+There is currently no dedicated CLI wrapper in `scraper/function/verifier.ts`; the file exports the verifier function. You can execute it from the repository root with `tsx` and it will persist the screenshot automatically:
 
 ```bash
-npx tsx -e "import { writeFileSync } from 'node:fs'; import { verifyProductExist } from './scraper/function/verifier.ts'; const image = await verifyProductExist(4, '2611823'); writeFileSync('./scraper/logs/verifier-druni-2611823.png', image);"
+npx tsx -e "import { verifyProductExist } from './scraper/function/verifier.ts'; const fileName = await verifyProductExist(4, '2611823'); console.log(fileName);"
 ```
 
-This creates a screenshot file under `scraper/logs/` that you can inspect manually.
+This creates a screenshot file under `scraper/tmp/screenshot/` and prints its generated filename.
 
 ## Common Failures
 
