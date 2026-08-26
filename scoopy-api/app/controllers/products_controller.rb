@@ -105,6 +105,46 @@ class ProductsController < ApplicationController
     render json: incidents
   end
 
+  def screenshot
+    filename = params[:filename].to_s
+    return head :not_found if filename.blank? || !filename.match?(/\A[a-f0-9-]{36}\.png\z/)
+
+    screenshot_dir = Rails.root.parent.join("scraper/tmp/screenshot").expand_path
+    file_path = screenshot_dir.join(filename)
+    return head :not_found unless file_path.file?
+
+    file_realpath = file_path.realpath
+    screenshot_root = screenshot_dir.realpath
+    return head :not_found unless file_realpath.to_s == file_path.to_s || file_realpath.to_s.start_with?("#{screenshot_root}/")
+
+    send_file file_realpath, type: "image/png", disposition: "inline"
+  rescue Errno::ENOENT
+    head :not_found
+  end
+
+  def verify
+    payload = request.body.read
+    items = payload.present? ? JSON.parse(payload) : []
+
+    if !items.is_a?(Array) || !items.size.between?(1, ProductVerificationService::MAX_BATCH_SIZE)
+      render json: { error: "Request must include between 1 and #{ProductVerificationService::MAX_BATCH_SIZE} items" }, status: :bad_request
+      return
+    end
+
+    result = ProductVerificationService.verify_batch(items)
+
+    if result[:meta][:all_failed]
+      render json: result, status: :bad_request
+      return
+    end
+
+    render json: result, status: :ok
+  rescue JSON::ParserError
+    render json: { error: "Invalid JSON payload" }, status: :bad_request
+  rescue ArgumentError => e
+    render json: { error: e.message }, status: :bad_request
+  end
+
   private
     # Use callbacks to share common setup or constraints between actions.
     def set_product

@@ -5,7 +5,13 @@ Rails.application.routes.draw do
              sessions: "users/sessions",
              registrations: "users/registrations"
            }
+  get "screenshots/:filename", to: "products#screenshot", as: :product_screenshot
+
   resources :products, defaults: { format: :json } do
+    collection do
+      post :verify
+    end
+
     member do
       get :price_history
       get :incidents
