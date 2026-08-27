@@ -16,7 +16,9 @@ export class HomePage {
   }
 
   async clickContinueModalButton(){
-    await this.continueModalButton.click()
+    if (await this.continueModalButton.isVisible()) {
+      await this.continueModalButton.click()
+    }
   }
   
   async clickSearchBar(){
