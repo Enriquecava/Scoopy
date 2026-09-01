@@ -112,7 +112,7 @@ export function ScreenshotsStep({ screenshotsStep }: ScreenshotsStepProps) {
         <div key={item.providerId} className="flex items-start gap-4 rounded-xl border border-white/10 bg-slate-950/40 p-4">
           <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-slate-950/70">
             {item.screenshotUrl ? (
-              <img src={`${API_BASE_URL}${item.screenshotUrl}`} alt={item.providerName} className="h-full w-full object-cover" />
+              <ScreenshotImage screenshotUrl={item.screenshotUrl} providerName={item.providerName} />
             ) : (
               <span className="px-2 text-center text-[10px] text-rose-300">{t('products.addProduct.screenshotItemError')}</span>
             )}
