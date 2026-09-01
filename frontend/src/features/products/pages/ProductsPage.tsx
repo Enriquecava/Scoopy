@@ -70,7 +70,7 @@ export function ProductsPage() {
 
         setProducts(cleanedProducts)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'No se pudieron cargar los productos.')
+        setError('products.search.loadError')
       } finally {
         setLoading(false)
       }
@@ -120,7 +120,7 @@ export function ProductsPage() {
         setSearchResults(cleanedProducts)
       } catch (err) {
         setSearchResults([])
-        setSearchError(err instanceof Error ? err.message : 'No se pudieron buscar productos.')
+        setSearchError('products.search.error')
       } finally {
         setSearchLoading(false)
       }
@@ -168,7 +168,7 @@ export function ProductsPage() {
                   <span>{t('products.search.loading')}</span>
                 </div>
               ) : searchError ? (
-                <p className="px-3 py-2 text-sm text-rose-300">{searchError}</p>
+                <p className="px-3 py-2 text-sm text-rose-300">{t(searchError)}</p>
               ) : searchResults.length > 0 ? (
                 <ul className="max-h-72 overflow-auto py-1">
                   {searchResults.map((product) => (
@@ -200,7 +200,7 @@ export function ProductsPage() {
         <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-10 text-center text-slate-300">{t('common.loading')}</div>
       ) : null}
 
-      {error ? <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">{error}</div> : null}
+      {error ? <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">{t(error)}</div> : null}
 
       {!loading && !error ? (
         products.length > 0 ? (

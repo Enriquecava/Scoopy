@@ -21,8 +21,6 @@ export function useAddProductProvidersStep({ active }: { active: boolean }) {
   const [providersLoading, setProvidersLoading] = useState(false)
   const [providersError, setProvidersError] = useState<string | null>(null)
   const [rows, setRows] = useState<ProviderRow[]>([createEmptyRow()])
-  const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
   const hasFetchedRef = useRef(false)
 
   const loadProviders = useCallback(async () => {
@@ -34,7 +32,7 @@ export function useAddProductProvidersStep({ active }: { active: boolean }) {
       const payload = response.data
       setProviders(Array.isArray(payload?.data) ? payload.data : [])
     } catch (err) {
-      setProvidersError(err instanceof Error ? err.message : 'No se pudieron cargar los proveedores.')
+      setProvidersError('products.addProduct.providersLoadError')
     } finally {
       setProvidersLoading(false)
     }
@@ -80,29 +78,8 @@ export function useAddProductProvidersStep({ active }: { active: boolean }) {
     rows.every((row) => row.providerId !== null && row.ssn.trim().length > 0) &&
     new Set(rows.map((row) => row.providerId)).size === rows.length
 
-  const submit = useCallback(async () => {
-    setSubmitError(null)
-    setSubmitting(true)
-
-    try {
-      // TODO: backend endpoint for this request is not implemented yet
-      await apiClient.post(
-        '',
-        rows.map((row) => ({ provider_id: row.providerId, ssn: row.ssn })),
-      )
-      return true
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'No se pudo guardar la información de proveedores.')
-      return false
-    } finally {
-      setSubmitting(false)
-    }
-  }, [rows])
-
   const reset = useCallback(() => {
     setRows([createEmptyRow()])
-    setSubmitError(null)
-    setSubmitting(false)
   }, [])
 
   return {
@@ -117,9 +94,6 @@ export function useAddProductProvidersStep({ active }: { active: boolean }) {
     updateRowSsn,
     availableProvidersForRow,
     isValid,
-    submitting,
-    submitError,
-    submit,
     reset,
   }
 }
