@@ -18,7 +18,6 @@ export function ProvidersStep({ providersStep }: ProvidersStepProps) {
     updateRowProvider,
     updateRowSsn,
     availableProvidersForRow,
-    submitError,
   } = providersStep
 
   if (providersLoading) {
@@ -100,8 +99,6 @@ export function ProvidersStep({ providersStep }: ProvidersStepProps) {
       >
         {t('products.addProduct.addProvider')}
       </button>
-
-      {submitError ? <p className="text-sm text-rose-300">{submitError}</p> : null}
     </div>
   )
 }

@@ -29,6 +29,10 @@ export function useAddProductWizard() {
     setStep((current) => Math.max(current - 1, 1))
   }, [])
 
+  const goToStep = useCallback((targetStep: number) => {
+    setStep(Math.min(Math.max(targetStep, 1), ADD_PRODUCT_WIZARD_TOTAL_STEPS))
+  }, [])
+
   const requestCancel = useCallback(() => {
     setIsCancelConfirmOpen(true)
   }, [])
@@ -46,6 +50,7 @@ export function useAddProductWizard() {
     canGoBack,
     goNext,
     goBack,
+    goToStep,
     isCancelConfirmOpen,
     requestCancel,
     dismissCancelConfirm,

@@ -77,13 +77,30 @@ class ProductVerificationService
             ssn = ssn.to_s.strip
             raise ArgumentError, "Invalid ssn" unless ssn.length.between?(1, 200)
 
-            screenshot_url = verify_product(provider_id, ssn)
-            {
-              provider_id: provider_id,
-              ssn: ssn,
-              screenshot: screenshot_url,
-              error: nil
-            }
+            existing_entry = ProvidersProduct.joins(:product)
+              .where(provider_id: provider_id, ssn: ssn)
+              .select('products.name')
+              .first
+
+            if existing_entry.present?
+              Rails.logger.info("Duplicate SSN detected for provider=#{provider_id} ssn=#{ssn.inspect} existing_product=#{existing_entry.name.inspect}")
+
+              {
+                provider_id: provider_id,
+                ssn: ssn,
+                screenshot: nil,
+                error: "duplicate_ssn",
+                product_name: existing_entry.name
+              }
+            else
+              screenshot_url = verify_product(provider_id, ssn)
+              {
+                provider_id: provider_id,
+                ssn: ssn,
+                screenshot: screenshot_url,
+                error: nil
+              }
+            end
           rescue StandardError => e
             Rails.logger.error("Verification failed for provider=#{provider_id.inspect} ssn=#{ssn.inspect}: #{e.class}: #{e.message}")
             {
