@@ -163,7 +163,7 @@ export function ProductDetailPage() {
     }
 
     if (!id) {
-      setError('Producto no encontrado.')
+      setError('products.detail.productNotFound')
       setLoading(false)
       return
     }
@@ -216,7 +216,7 @@ export function ProductDetailPage() {
           setScraperIncidents([])
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'No se pudo cargar el producto.')
+        setError('products.detail.productLoadError')
       } finally {
         setLoading(false)
       }
@@ -339,7 +339,7 @@ export function ProductDetailPage() {
         <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-10 text-center text-slate-300">{t('common.loading')}</div>
       ) : null}
 
-      {error ? <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">{error}</div> : null}
+      {error ? <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">{t(error)}</div> : null}
 
       {!loading && !error && product ? (
         <>

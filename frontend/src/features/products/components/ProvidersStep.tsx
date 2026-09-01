@@ -27,7 +27,7 @@ export function ProvidersStep({ providersStep }: ProvidersStepProps) {
   if (providersError) {
     return (
       <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">
-        <p>{providersError}</p>
+        <p>{t(providersError)}</p>
         <button type="button" onClick={retryProviders} className="mt-2 text-xs font-medium underline">
           {t('products.addProduct.providersRetry')}
         </button>

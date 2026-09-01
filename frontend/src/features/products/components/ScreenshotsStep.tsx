@@ -95,7 +95,7 @@ export function ScreenshotsStep({ screenshotsStep }: ScreenshotsStepProps) {
   if (error) {
     return (
       <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">
-        <p>{error}</p>
+        <p>{t(error)}</p>
         <button type="button" onClick={() => void retry()} className="mt-2 text-xs font-medium underline">
           {t('products.addProduct.screenshotsRetry')}
         </button>

@@ -32,7 +32,7 @@ export function useAddProductProvidersStep({ active }: { active: boolean }) {
       const payload = response.data
       setProviders(Array.isArray(payload?.data) ? payload.data : [])
     } catch (err) {
-      setProvidersError(err instanceof Error ? err.message : 'No se pudieron cargar los proveedores.')
+      setProvidersError('products.addProduct.providersLoadError')
     } finally {
       setProvidersLoading(false)
     }

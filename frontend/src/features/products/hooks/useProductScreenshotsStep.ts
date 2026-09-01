@@ -64,7 +64,7 @@ export function useProductScreenshotsStep({
         })),
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudieron verificar los productos.')
+      setError('products.addProduct.screenshotsVerifyError')
       setItems([])
     } finally {
       setLoading(false)
