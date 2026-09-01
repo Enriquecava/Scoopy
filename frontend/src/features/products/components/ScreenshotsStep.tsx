@@ -1,5 +1,5 @@
 import { LoaderCircle } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from '../../../shared/i18n'
 import { useAuth } from '../../../app/providers/AuthProvider'
 import type { useProductScreenshotsStep } from '../hooks/useProductScreenshotsStep'
@@ -15,6 +15,7 @@ function ScreenshotImage({ screenshotUrl, providerName }: ScreenshotImageProps) 
   const { token } = useAuth()
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [loadingImage, setLoadingImage] = useState(false)
+  const objectUrlRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!screenshotUrl || !token) {
@@ -39,6 +40,7 @@ function ScreenshotImage({ screenshotUrl, providerName }: ScreenshotImageProps) 
 
         const blob = await response.blob()
         const url = URL.createObjectURL(blob)
+        objectUrlRef.current = url
         setImageUrl(url)
       } catch (err) {
         console.error('Failed to load screenshot:', err)
@@ -51,11 +53,12 @@ function ScreenshotImage({ screenshotUrl, providerName }: ScreenshotImageProps) 
     void loadImage()
 
     return () => {
-      if (imageUrl) {
-        URL.revokeObjectURL(imageUrl)
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+        objectUrlRef.current = null
       }
     }
-  }, [screenshotUrl, token, imageUrl])
+  }, [screenshotUrl, token])
 
   if (loadingImage) {
     return (
