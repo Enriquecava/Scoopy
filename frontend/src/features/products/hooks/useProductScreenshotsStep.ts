@@ -63,9 +63,28 @@ export function useProductScreenshotsStep({
           confirmed: false,
         })),
       )
-    } catch (err) {
-      setError('products.addProduct.screenshotsVerifyError')
-      setItems([])
+    } catch (err: unknown) {
+      // Check if error is specific (duplicate SSN, etc)
+      const errorResponse = (err as any)?.response?.data
+      
+      if (errorResponse?.data && Array.isArray(errorResponse.data)) {
+        // API returned specific errors for items, show them
+        setItems(
+          errorResponse.data.map((entry: VerifyResponseItem) => ({
+            providerId: entry.provider_id,
+            providerName: providerName(entry.provider_id),
+            ssn: entry.ssn,
+            screenshotUrl: entry.screenshot,
+            error: entry.error,
+            productName: entry.product_name,
+            confirmed: false,
+          })),
+        )
+      } else {
+        // Generic error
+        setError('products.addProduct.screenshotsVerifyError')
+        setItems([])
+      }
     } finally {
       setLoading(false)
     }

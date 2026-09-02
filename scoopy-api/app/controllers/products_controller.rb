@@ -37,20 +37,129 @@ class ProductsController < ApplicationController
 
   # POST /products
   def create
-    @product = Product.new(post_product_params)
+    name = params.require(:name)
+    provider_products = params.require(:provider_products)
 
-    if @product.save
-      render json: @product.as_json(
-        include: [
-            providers_products: {
-              only: %i[id ssn],
-              methods: [:provider_name]
-            }
-        ]
-      ), status: :created, location: @product
-    else
-      render json: @product.errors, status: :unprocessable_content
+    unless name.is_a?(String)
+      render json: { error: "name must be a string" }, status: :bad_request
+      return
     end
+
+    name = name.strip
+    
+    if name.blank?
+      render json: { error: "name cannot be blank" }, status: :bad_request
+      return
+    end
+
+    if name.length < 2
+      render json: { error: "name must be at least 2 characters" }, status: :bad_request
+      return
+    end
+
+    if name.length > 255
+      render json: { error: "name must not exceed 255 characters" }, status: :bad_request
+      return
+    end
+    
+    unless provider_products.is_a?(Array)
+      render json: { error: "provider_products must be an array" }, status: :bad_request
+      return
+    end
+
+    if provider_products.empty?
+      render json: { error: "provider_products cannot be empty" }, status: :bad_request
+      return
+    end
+    provider_products.each_with_index do |pp_data, index|
+      provider_id = pp_data[:provider_id] || pp_data["provider_id"]
+      ssn = pp_data[:ssn] || pp_data["ssn"]
+
+      unless provider_id && ssn
+        render json: { 
+          error: "provider_id and ssn are required for each provider_product",
+          invalid_index: index
+        }, status: :bad_request
+        return
+      end
+
+      unless ssn.is_a?(String)
+        render json: {
+          error: "ssn must be a string",
+          invalid_index: index
+        }, status: :bad_request
+        return
+      end
+
+      if ssn.strip.blank?
+        render json: {
+          error: "ssn cannot be blank",
+          invalid_index: index
+        }, status: :bad_request
+        return
+      end
+    end
+
+    @product = nil
+    provider_products_errors = []
+
+    begin
+      ActiveRecord::Base.transaction do
+        @product = Product.new(name: name)
+
+        unless @product.save
+          raise ActiveRecord::Rollback
+        end
+
+        provider_products.each do |pp_data|
+          provider_id = pp_data[:provider_id] || pp_data["provider_id"]
+          ssn = pp_data[:ssn] || pp_data["ssn"]
+
+          existing = ProvidersProduct.find_by(ssn: ssn)
+          if existing.present?
+            provider_products_errors << {
+              error: "SSN already assigned to existing product",
+              ssn: ssn,
+              existing_product_id: existing.product_id
+            }
+            raise ActiveRecord::Rollback
+          end
+
+          provider_product = @product.providers_products.build(
+            provider_id: provider_id,
+            ssn: ssn
+          )
+
+          unless provider_product.save
+            provider_products_errors << {
+              error: "Failed to save provider_product",
+              provider_id: provider_id,
+              ssn: ssn,
+              details: provider_product.errors
+            }
+            raise ActiveRecord::Rollback
+          end
+        end
+      end
+    rescue ActiveRecord::Rollback
+      if @product&.persisted?
+        render json: { errors: @product.errors }, status: :unprocessable_content
+      elsif provider_products_errors.any?
+        render json: { errors: provider_products_errors }, status: :bad_request
+      else
+        render json: { error: "Failed to create product and provider_products" }, status: :unprocessable_content
+      end
+      return
+    end
+
+    render json: @product.as_json(
+      include: [
+          providers_products: {
+            only: %i[id ssn provider_id],
+            methods: [:provider_name]
+          }
+      ]
+    ), status: :created, location: @product
   end
 
   #PATCH/PUT /products/1

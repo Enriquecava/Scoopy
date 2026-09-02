@@ -38,45 +38,45 @@ export function ProductsPage() {
     }
   }, [searchTerm])
 
+  const loadProducts = async () => {
+    setError(null)
+    setLoading(true)
+
+    try {
+      const response = await apiClient.get('/products')
+      const payload = response.data
+      const normalizedProducts = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.products)
+          ? payload.products
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : []
+
+      const cleanedProducts = normalizedProducts.filter((item: unknown): item is Product => {
+        if (!item || typeof item !== 'object') {
+          return false
+        }
+
+        const candidate = item as Partial<Product>
+        return (typeof candidate.id === 'string' || typeof candidate.id === 'number') && typeof candidate.name === 'string'
+      })
+
+      setProducts(cleanedProducts)
+    } catch (err) {
+      setError('products.search.loadError')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login', { replace: true })
       return
     }
 
-    const loadInitialProducts = async () => {
-      setError(null)
-      setLoading(true)
-
-      try {
-        const response = await apiClient.get('/products')
-        const payload = response.data
-        const normalizedProducts = Array.isArray(payload)
-          ? payload
-          : Array.isArray(payload?.products)
-            ? payload.products
-            : Array.isArray(payload?.data)
-              ? payload.data
-              : []
-
-        const cleanedProducts = normalizedProducts.filter((item: unknown): item is Product => {
-          if (!item || typeof item !== 'object') {
-            return false
-          }
-
-          const candidate = item as Partial<Product>
-          return (typeof candidate.id === 'string' || typeof candidate.id === 'number') && typeof candidate.name === 'string'
-        })
-
-        setProducts(cleanedProducts)
-      } catch (err) {
-        setError('products.search.loadError')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void loadInitialProducts()
+    void loadProducts()
   }, [isAuthenticated, navigate])
 
   useEffect(() => {
@@ -138,7 +138,7 @@ export function ProductsPage() {
           <p className="text-sm uppercase tracking-[0.35em] text-cyan-400">{t('products.sectionTitle')}</p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h2 className="text-2xl font-semibold">{t('products.title')}</h2>
-            <AddProductButton />
+            <AddProductButton onProductCreated={loadProducts} />
           </div>
           <p className="mt-2 text-sm text-slate-400">{t('products.subtitle')}</p>
         </div>

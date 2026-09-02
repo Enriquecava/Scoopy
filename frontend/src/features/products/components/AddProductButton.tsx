@@ -4,7 +4,11 @@ import { useTranslation } from '../../../shared/i18n'
 import { featureFlags } from '../../../shared/config/featureFlags'
 import { AddProductWizardModal } from './AddProductWizardModal'
 
-export function AddProductButton() {
+type AddProductButtonProps = {
+  onProductCreated?: () => void
+}
+
+export function AddProductButton({ onProductCreated }: AddProductButtonProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
 
@@ -23,7 +27,7 @@ export function AddProductButton() {
         {t('products.addProduct.button')}
       </button>
 
-      <AddProductWizardModal open={open} onOpenChange={setOpen} />
+      <AddProductWizardModal open={open} onOpenChange={setOpen} onProductCreated={onProductCreated} />
     </>
   )
 }
