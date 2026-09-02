@@ -52,7 +52,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_02_000006) do
     t.datetime "updated_at", null: false
     t.index ["product_id", "provider_id"], name: "index_providers_products_on_product_id_and_provider_id", unique: true
     t.index ["product_id"], name: "index_providers_products_on_product_id"
-    t.index ["provider_id", "ssn"], name: "index_providers_products_on_provider_id_and_ssn", unique: true
     t.index ["provider_id"], name: "index_providers_products_on_provider_id"
   end
 
