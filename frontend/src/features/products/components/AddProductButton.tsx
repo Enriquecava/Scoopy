@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useTranslation } from '../../../shared/i18n'
-import { featureFlags } from '../../../shared/config/featureFlags'
 import { AddProductWizardModal } from './AddProductWizardModal'
 
 type AddProductButtonProps = {
@@ -11,10 +10,6 @@ type AddProductButtonProps = {
 export function AddProductButton({ onProductCreated }: AddProductButtonProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-
-  if (!featureFlags.addProductWizard) {
-    return null
-  }
 
   return (
     <>
