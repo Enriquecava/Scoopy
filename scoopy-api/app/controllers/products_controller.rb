@@ -1,4 +1,14 @@
 class ProductsController < ApplicationController
+  class ProductCreationError < StandardError
+    attr_reader :status, :payload
+
+    def initialize(status:, payload:)
+      @status = status
+      @payload = payload
+      super()
+    end
+  end
+
   before_action :set_product, only: %i[ show update destroy price_history incidents ]
   before_action :authenticate_user!
 
@@ -71,11 +81,16 @@ class ProductsController < ApplicationController
       render json: { error: "provider_products cannot be empty" }, status: :bad_request
       return
     end
-    provider_products.each_with_index do |pp_data, index|
-      provider_id = pp_data[:provider_id] || pp_data["provider_id"]
+    normalized_provider_products = provider_products.each_with_index.map do |pp_data, index|
+      unless pp_data.is_a?(ActionController::Parameters) || pp_data.is_a?(Hash)
+        render json: { error: "provider_product must be an object", invalid_index: index }, status: :bad_request
+        return
+      end
+
+      provider_id_value = pp_data[:provider_id] || pp_data["provider_id"]
       ssn = pp_data[:ssn] || pp_data["ssn"]
 
-      unless provider_id && ssn
+      unless provider_id_value && ssn
         render json: { 
           error: "provider_id and ssn are required for each provider_product",
           invalid_index: index
@@ -91,6 +106,18 @@ class ProductsController < ApplicationController
         return
       end
 
+      begin
+        provider_id = Integer(provider_id_value)
+      rescue ArgumentError, TypeError
+        render json: { error: "provider_id must be an integer", invalid_index: index }, status: :bad_request
+        return
+      end
+
+      unless provider_id.positive? && Provider.exists?(provider_id)
+        render json: { error: "provider_id is invalid", invalid_index: index }, status: :bad_request
+        return
+      end
+
       if ssn.strip.blank?
         render json: {
           error: "ssn cannot be blank",
@@ -98,57 +125,54 @@ class ProductsController < ApplicationController
         }, status: :bad_request
         return
       end
+
+      { provider_id: provider_id, ssn: ssn.strip }
     end
 
-    @product = nil
-    provider_products_errors = []
-
     begin
-      ActiveRecord::Base.transaction do
-        @product = Product.new(name: name)
+      @product = ActiveRecord::Base.transaction do
+        product = Product.create!(name: name)
 
-        unless @product.save
-          raise ActiveRecord::Rollback
-        end
+        normalized_provider_products.each do |provider_product_data|
+          provider_id = provider_product_data[:provider_id]
+          ssn = provider_product_data[:ssn]
+          existing = ProvidersProduct.includes(:product).find_by(provider_id: provider_id, ssn: ssn)
 
-        provider_products.each do |pp_data|
-          provider_id = pp_data[:provider_id] || pp_data["provider_id"]
-          ssn = pp_data[:ssn] || pp_data["ssn"]
-
-          existing = ProvidersProduct.find_by(ssn: ssn)
           if existing.present?
-            provider_products_errors << {
-              error: "SSN already assigned to existing product",
-              ssn: ssn,
-              existing_product_id: existing.product_id
-            }
-            raise ActiveRecord::Rollback
+            raise ProductCreationError.new(
+              status: :bad_request,
+              payload: {
+                errors: [ {
+                  error: "duplicate_ssn",
+                  provider_id: provider_id,
+                  ssn: ssn,
+                  existing_product_id: existing.product_id,
+                  product_name: existing.product.name
+                } ]
+              }
+            )
           end
 
-          provider_product = @product.providers_products.build(
+          product.providers_products.create!(
             provider_id: provider_id,
             ssn: ssn
           )
-
-          unless provider_product.save
-            provider_products_errors << {
-              error: "Failed to save provider_product",
-              provider_id: provider_id,
-              ssn: ssn,
-              details: provider_product.errors
-            }
-            raise ActiveRecord::Rollback
-          end
         end
+
+        product
       end
-    rescue ActiveRecord::Rollback
-      if @product&.persisted?
-        render json: { errors: @product.errors }, status: :unprocessable_content
-      elsif provider_products_errors.any?
-        render json: { errors: provider_products_errors }, status: :bad_request
-      else
-        render json: { error: "Failed to create product and provider_products" }, status: :unprocessable_content
-      end
+    rescue ProductCreationError => e
+      render json: e.payload, status: e.status
+      return
+    rescue ActiveRecord::RecordNotUnique
+      render json: {
+        errors: [ {
+          error: "provider_product_conflict"
+        } ]
+      }, status: :unprocessable_content
+      return
+    rescue ActiveRecord::RecordInvalid => e
+      render json: { errors: [ { error: "validation_failed", details: e.record.errors.full_messages } ] }, status: :unprocessable_content
       return
     end
 
