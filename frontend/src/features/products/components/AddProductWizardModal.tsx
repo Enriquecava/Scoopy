@@ -1,20 +1,23 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, AlertCircle } from 'lucide-react'
 import { useTranslation } from '../../../shared/i18n'
 import { useAddProductWizard } from '../hooks/useAddProductWizard'
 import { useAddProductProvidersStep } from '../hooks/useAddProductProvidersStep'
 import { useProductScreenshotsStep } from '../hooks/useProductScreenshotsStep'
+import { apiClient } from '../../../shared/api/client'
 import { CancelConfirmDialog } from './CancelConfirmDialog'
 import { ProvidersStep } from './ProvidersStep'
 import { ScreenshotsStep } from './ScreenshotsStep'
 import { StepDots } from './StepDots'
+import { useState } from 'react'
 
 type AddProductWizardModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onProductCreated?: () => void
 }
 
-export function AddProductWizardModal({ open, onOpenChange }: AddProductWizardModalProps) {
+export function AddProductWizardModal({ open, onOpenChange, onProductCreated }: AddProductWizardModalProps) {
   const { t } = useTranslation()
   const wizard = useAddProductWizard()
   const providersStep = useAddProductProvidersStep({ active: wizard.step === 2 })
@@ -23,11 +26,15 @@ export function AddProductWizardModal({ open, onOpenChange }: AddProductWizardMo
     rows: providersStep.rows,
     providers: providersStep.providers,
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const resetAll = () => {
     wizard.reset()
     providersStep.reset()
     screenshotsStep.reset()
+    setIsSubmitting(false)
+    setSubmitError(null)
   }
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -49,9 +56,45 @@ export function AddProductWizardModal({ open, onOpenChange }: AddProductWizardMo
     wizard.goNext()
   }
 
-  const handleAddProduct = () => {
-    // TODO: call the product creation endpoint once the backend contract (POST /products vs. a dedicated endpoint) is defined
-    wizard.goNext()
+  const handleAddProduct = async () => {
+    setIsSubmitting(true)
+    setSubmitError(null)
+
+    try {
+      const provider_products = providersStep.rows.map((row) => ({
+        provider_id: row.providerId,
+        ssn: row.ssn.trim(),
+      }))
+
+      await apiClient.post('/products', {
+        name: wizard.name.trim(),
+        provider_products,
+      })
+
+      // Success - move to confirmation step
+      wizard.goNext()
+      // Notify parent to reload products
+      onProductCreated?.()
+    } catch (error: unknown) {
+      let errorMessage = 'Unknown error'
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+      } else if (typeof error === 'object' && error !== null && 'response' in error) {
+        const response = (error as any).response
+        if (response?.data?.error) {
+          errorMessage = response.data.error
+        } else if (response?.data?.errors) {
+          errorMessage = Array.isArray(response.data.errors) 
+            ? response.data.errors[0]?.error || 'Failed to create product'
+            : 'Failed to create product'
+        }
+      }
+      
+      setSubmitError(errorMessage)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleFinish = () => {
@@ -124,6 +167,13 @@ export function AddProductWizardModal({ open, onOpenChange }: AddProductWizardMo
                   <p className="text-sm text-slate-400">{t('products.addProduct.confirmationBody')}</p>
                 </div>
               )}
+
+              {submitError && (
+                <div className="mt-4 flex gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+                  <AlertCircle className="h-5 w-5 shrink-0 text-red-400" />
+                  <p className="text-sm text-red-300">{submitError}</p>
+                </div>
+              )}
             </div>
 
             {wizard.step < 4 ? (
@@ -150,10 +200,10 @@ export function AddProductWizardModal({ open, onOpenChange }: AddProductWizardMo
                     <button
                       type="button"
                       onClick={handleAddProduct}
-                      disabled={!screenshotsStep.isAllConfirmed}
+                      disabled={!screenshotsStep.isAllConfirmed || isSubmitting}
                       className="rounded-xl bg-cyan-500/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-500/30 disabled:text-slate-500"
                     >
-                      {t('products.addProduct.addProductButton')}
+                      {isSubmitting ? t('products.addProduct.submitting') : t('products.addProduct.addProductButton')}
                     </button>
                   ) : (
                     <button

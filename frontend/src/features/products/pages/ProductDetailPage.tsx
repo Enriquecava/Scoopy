@@ -37,11 +37,6 @@ type ScraperIncident = {
   created_at: string
 }
 
-type DuplicateSSNInfo = {
-  providerId: number
-  productName: string
-}
-
 type ChartPoint = {
   x: number
   y: number
@@ -151,7 +146,6 @@ export function ProductDetailPage() {
   const [product, setProduct] = useState<ProductDetail | null>(null)
   const [priceHistory, setPriceHistory] = useState<PriceHistoryItem[]>([])
   const [scraperIncidents, setScraperIncidents] = useState<ScraperIncident[]>([])
-  const [duplicateSSNs, setDuplicateSSNs] = useState<Map<number, DuplicateSSNInfo>>(new Map())
   const [activePoint, setActivePoint] = useState<ChartPoint | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -180,34 +174,6 @@ export function ProductDetailPage() {
 
         setProduct(productPayload)
         setPriceHistory(Array.isArray(historyPayload.price_history) ? historyPayload.price_history : [])
-
-        // Verify SSNs for duplicates
-        if (productPayload.providers_products && productPayload.providers_products.length > 0) {
-          try {
-            const verifyResponse = await apiClient.post('/products/verify', 
-              productPayload.providers_products.map((pp) => ({
-                provider_id: pp.provider_id,
-                ssn: pp.ssn,
-              })),
-            )
-            
-            if (verifyResponse.data?.data && Array.isArray(verifyResponse.data.data)) {
-              const duplicateMap = new Map<number, DuplicateSSNInfo>()
-              verifyResponse.data.data.forEach((item: { provider_id: number; error?: string; product_name?: string }) => {
-                if (item.error === 'duplicate_ssn' && item.product_name) {
-                  duplicateMap.set(item.provider_id, {
-                    providerId: item.provider_id,
-                    productName: item.product_name,
-                  })
-                }
-              })
-              setDuplicateSSNs(duplicateMap)
-            }
-          } catch {
-            // Verification failed silently - don't block UI
-            setDuplicateSSNs(new Map())
-          }
-        }
 
         try {
           const incidentsResponse = await apiClient.get(`/products/${id}/incidents`)
@@ -392,11 +358,6 @@ export function ProductDetailPage() {
                             <div>
                               <p className="font-medium text-slate-100">{providerName}</p>
                               <p className="text-sm text-slate-400">SSN: {provider.ssn ?? 'N/A'}</p>
-                              {duplicateSSNs.has(Number(provider.provider_id)) ? (
-                                <p className="mt-1 text-xs text-orange-300">
-                                  {t('products.detail.duplicateSSN', { productName: duplicateSSNs.get(Number(provider.provider_id))?.productName || '' })}
-                                </p>
-                              ) : null}
                             </div>
                             <span
                               className={`group relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
