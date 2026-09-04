@@ -1,10 +1,11 @@
 Rails.application.routes.draw do
   devise_for :users,
+           skip: [:registrations],
            defaults: { format: :json },
            controllers: {
-             sessions: "users/sessions",
-             registrations: "users/registrations"
+             sessions: "users/sessions"
            }
+  resources :users, only: :create, defaults: { format: :json }
   get "screenshots/:filename", to: "products#screenshot", as: :product_screenshot
 
   resources :products, defaults: { format: :json } do
