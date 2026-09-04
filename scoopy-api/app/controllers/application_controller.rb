@@ -1,9 +1,9 @@
 class ApplicationController < ActionController::API
-	private
+  private
 
-	def require_admin!
-		return if current_user&.admin?
+  def require_admin!
+    return if current_user&.admin?
 
-		render json: { error: "forbidden" }, status: :forbidden
-	end
+    render json: { error: "forbidden" }, status: :forbidden
+  end
 end

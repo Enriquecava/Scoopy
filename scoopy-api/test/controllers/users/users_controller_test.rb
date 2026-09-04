@@ -1,6 +1,6 @@
 require "test_helper"
 
-class RegistrationsControllerTest < ActionDispatch::IntegrationTest
+class UsersControllerTest < ActionDispatch::IntegrationTest
   setup do
     @user = User.create!(email: "registrations.user.#{SecureRandom.uuid}@example.com", password: "123456")
     @admin = User.create!(email: "registrations.admin.#{SecureRandom.uuid}@example.com", password: "123456", role: :admin)
