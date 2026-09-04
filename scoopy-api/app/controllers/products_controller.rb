@@ -295,7 +295,7 @@ class ProductsController < ApplicationController
     def update_product_params
       params.require(:product).permit(
         :name,
-        providers_products_attributes: [:ssn, :provider_id, :_destroy]
+        providers_products_attributes: [:id, :ssn, :provider_id, :_destroy]
       )
     end
 end

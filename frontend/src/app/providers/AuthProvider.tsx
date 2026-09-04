@@ -13,6 +13,7 @@ function normalizeToken(value: unknown): string | null {
 
 type AuthContextValue = {
   token: string | null
+  role: 'user' | 'admin' | null
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
@@ -22,6 +23,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 const STORAGE_KEY = 'scoopy:token'
+const ROLE_STORAGE_KEY = 'scoopy:role'
 
 function getAuthErrorMessage(error: unknown): string {
   const response =
@@ -43,6 +45,10 @@ function getAuthErrorMessage(error: unknown): string {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(STORAGE_KEY))
+  const [role, setRole] = useState<'user' | 'admin' | null>(() => {
+    const storedRole = sessionStorage.getItem(ROLE_STORAGE_KEY)
+    return storedRole === 'admin' || storedRole === 'user' ? storedRole : null
+  })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(false)
@@ -56,6 +62,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     delete apiClient.defaults.headers.common.Authorization
   }, [token])
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      sessionStorage.removeItem(STORAGE_KEY)
+      sessionStorage.removeItem(ROLE_STORAGE_KEY)
+      setToken(null)
+      setRole(null)
+      setError(translate('auth.errors.sessionExpired', getInitialLocale()))
+    }
+
+    window.addEventListener('scoopy:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('scoopy:unauthorized', handleUnauthorized)
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -99,6 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       sessionStorage.setItem(STORAGE_KEY, normalizedToken)
       setToken(normalizedToken)
+      const nextRole = response.data?.user?.role === 'admin' ? 'admin' : 'user'
+      sessionStorage.setItem(ROLE_STORAGE_KEY, nextRole)
+      setRole(nextRole)
     } catch (err) {
       const message = getAuthErrorMessage(err)
       setError(message)
@@ -110,20 +132,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     sessionStorage.removeItem(STORAGE_KEY)
+    sessionStorage.removeItem(ROLE_STORAGE_KEY)
     setToken(null)
+    setRole(null)
     setError(null)
   }
 
   const value = useMemo<AuthContextValue>(
     () => ({
       token,
+      role,
       isAuthenticated: Boolean(token),
       isLoading: isLoading || !hydrated,
       error,
       login,
       logout,
     }),
-    [token, isLoading, error, hydrated],
+    [token, role, isLoading, error, hydrated],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

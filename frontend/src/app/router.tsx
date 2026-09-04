@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { LoginPage } from '../features/auth/pages/LoginPage'
 import { ProductDetailPage } from '../features/products/pages/ProductDetailPage'
 import { ProductsPage } from '../features/products/pages/ProductsPage'
+import { AdminPage } from '../features/admin/pages/AdminPage'
 import { useTranslation } from '../shared/i18n'
 import { MainLayout } from './layouts/MainLayout'
 import { useAuth } from './providers/AuthProvider'
@@ -42,6 +43,16 @@ export function AppRouter() {
           <ProtectedRoute>
             <MainLayout>
               <ProductDetailPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <AdminPage />
             </MainLayout>
           </ProtectedRoute>
         }

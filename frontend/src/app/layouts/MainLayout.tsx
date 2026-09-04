@@ -9,7 +9,7 @@ type MainLayoutProps = {
 }
 
 export function MainLayout({ children }: MainLayoutProps) {
-  const { logout } = useAuth()
+  const { logout, role } = useAuth()
   const navigate = useNavigate()
   const { locale, setLocale, t } = useTranslation()
 
@@ -28,6 +28,11 @@ export function MainLayout({ children }: MainLayoutProps) {
           </Link>
 
           <div className="flex items-center gap-2">
+            {role === 'admin' ? (
+              <Link to="/admin" className="rounded-full border border-cyan-500/30 px-3 py-2 text-sm text-cyan-300 transition hover:bg-cyan-500/10">
+                {t('admin.title')}
+              </Link>
+            ) : null}
             <button
               type="button"
               onClick={() => setLocale(locale === 'es' ? 'en' : 'es')}
