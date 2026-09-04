@@ -4,8 +4,12 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
   setup do
     @product = products(:one)
     @user = User.create!(email: "products.user.#{SecureRandom.uuid}@example.com", password: "123456")
+    @admin = User.create!(email: "products.admin.#{SecureRandom.uuid}@example.com", password: "123456", role: :admin)
     @auth_headers = {
       "Authorization" => "Bearer #{sign_in(@user)}"
+    }
+    @admin_auth_headers = {
+      "Authorization" => "Bearer #{sign_in(@admin)}"
     }
   end
 
@@ -104,8 +108,13 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should create product" do
+    provider = Provider.create!(name: "New provider", url: "https://new.example.com")
+
     assert_difference("Product.count") do
-      post products_url, params: { product: { name: @product.name } }, headers: @auth_headers, as: :json
+      post products_url, params: {
+        name: "New product #{SecureRandom.uuid}",
+        provider_products: [{ provider_id: provider.id, ssn: "NEW-SSN" }]
+      }, headers: @auth_headers, as: :json
     end
 
     assert_response :created
@@ -124,16 +133,26 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should update product" do
-    patch product_url(@product), params: { product: { name: @product.name } }, headers: @auth_headers, as: :json
+    patch product_url(@product), params: { product: { name: "Updated product" } }, headers: @admin_auth_headers, as: :json
     assert_response :success
+  end
+
+  test "should forbid a regular user from updating a product" do
+    patch product_url(@product), params: { product: { name: "Updated product" } }, headers: @auth_headers, as: :json
+    assert_response :forbidden
   end
 
   test "should destroy product" do
     assert_difference("Product.count", -1) do
-      delete product_url(@product), headers: @auth_headers, as: :json
+      delete product_url(@product), headers: @admin_auth_headers, as: :json
     end
 
     assert_response :no_content
+  end
+
+  test "should forbid a regular user from destroying a product" do
+    delete product_url(@product), headers: @auth_headers, as: :json
+    assert_response :forbidden
   end
 
   test "should reject duplicate provider_ids in the same verification batch" do

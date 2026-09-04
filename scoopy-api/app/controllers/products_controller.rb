@@ -9,8 +9,9 @@ class ProductsController < ApplicationController
     end
   end
 
-  before_action :set_product, only: %i[ show update destroy price_history incidents ]
   before_action :authenticate_user!
+  before_action :require_admin!, only: %i[ update destroy ]
+  before_action :set_product, only: %i[ show update destroy price_history incidents ]
 
   # GET /products
   def index
