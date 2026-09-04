@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { UserPlus } from 'lucide-react'
 import { useAuth } from '../../../app/providers/AuthProvider'
 import { apiClient } from '../../../shared/api/client'
@@ -17,8 +17,7 @@ export function AdminPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   if (role !== 'admin') {
-    navigate('/products', { replace: true })
-    return null
+    return <Navigate to="/products" replace />
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {

@@ -137,6 +137,22 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "should update an existing provider product" do
+    provider = Provider.create!(name: "Update provider", url: "https://update.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "12345")
+
+    assert_no_difference("ProvidersProduct.count") do
+      patch product_url(@product), params: {
+        product: {
+          providers_products_attributes: [{ id: [@product.id, provider.id], provider_id: provider.id, ssn: "UPDATED-SSN" }]
+        }
+      }, headers: @admin_auth_headers, as: :json
+    end
+
+    assert_response :success
+    assert_equal "UPDATED-SSN", providers_product.reload.ssn
+  end
+
   test "should forbid a regular user from updating a product" do
     patch product_url(@product), params: { product: { name: "Updated product" } }, headers: @auth_headers, as: :json
     assert_response :forbidden

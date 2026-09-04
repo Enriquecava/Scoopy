@@ -15,6 +15,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     body = response.parsed_body
 
     assert_equal user.email, body.dig("user", "email")
+    assert_equal user.role, body.dig("user", "role")
     assert_not_nil body["token"]
   end
 end

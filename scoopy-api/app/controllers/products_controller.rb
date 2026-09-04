@@ -189,19 +189,31 @@ class ProductsController < ApplicationController
 
   #PATCH/PUT /products/1
   def update
-    @product.providers_products.destroy_all if request.put?
-    if @product.update(update_product_params)
-      render json: @product.as_json(
-        include: [
-            providers_products: {
-              only: %i[id ssn provider_id],
-              methods: [:provider_name]
-            }
-        ]
-      )
-    else
-      render json: @product.errors, status: :unprocessable_content
+    product_params = update_product_params
+    providers_products_attributes = product_params.delete(:providers_products_attributes)
+
+    Product.transaction do
+      @product.update!(product_params)
+      Array(providers_products_attributes).each do |attributes|
+        provider_id = attributes[:provider_id] || Array(attributes[:id]).last
+        providers_product = @product.providers_products.find_by!(provider_id: provider_id)
+
+        if attributes[:_destroy]
+          providers_product.destroy!
+        else
+          providers_product.update!(attributes.slice(:ssn))
+        end
+      end
     end
+
+    render json: @product.as_json(
+      include: [
+          providers_products: {
+            only: %i[id ssn provider_id],
+            methods: [:provider_name]
+          }
+      ]
+    )
   end
 
   # DELETE /products/1
