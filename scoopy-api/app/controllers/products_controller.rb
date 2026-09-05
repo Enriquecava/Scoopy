@@ -205,13 +205,18 @@ class ProductsController < ApplicationController
 
         if ActiveModel::Type::Boolean.new.cast(attributes[:_destroy])
           providers_product.destroy!
-        else
+        elsif attributes.key?(:ssn)
           normalized_ssn = attributes[:ssn].to_s.strip
-          candidate_pairs << [provider_id, normalized_ssn] if normalized_ssn.present?
+          raise ProductCreationError.new(
+            status: :bad_request,
+            payload: { error: "ssn cannot be blank" }
+          ) if normalized_ssn.blank?
+
+          candidate_pairs << [provider_id, normalized_ssn]
           existing = duplicate_provider_product(provider_id, normalized_ssn)
           raise_duplicate_provider_product(existing) if existing
 
-          providers_product.update!(attributes.slice(:ssn).merge(ssn: normalized_ssn))
+          providers_product.update!(ssn: normalized_ssn)
         end
       end
     end

@@ -233,6 +233,35 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "AVAILABLE-SSN", providers_product.reload.ssn
   end
 
+  test "should preserve SSN when it is omitted from an update" do
+    provider = Provider.create!(name: "Omitted SSN provider", url: "https://omitted-ssn.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "UNCHANGED-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :success
+    assert_equal "UNCHANGED-SSN", providers_product.reload.ssn
+  end
+
+  test "should reject a blank SSN on update without clearing the existing value" do
+    provider = Provider.create!(name: "Blank SSN provider", url: "https://blank-ssn.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "UNCHANGED-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id, ssn: "   " }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "ssn cannot be blank", response.parsed_body["error"]
+    assert_equal "UNCHANGED-SSN", providers_product.reload.ssn
+  end
+
   test "should destroy an existing provider product when _destroy is true" do
     provider = Provider.create!(name: "Delete provider", url: "https://delete.example.com")
     providers_product = @product.providers_products.create!(provider: provider, ssn: "12345")
