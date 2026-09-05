@@ -61,10 +61,12 @@ export function AddProductWizardModal({ open, onOpenChange, onProductCreated }: 
     setSubmitError(null)
 
     try {
-      const provider_products = providersStep.rows.map((row) => ({
-        provider_id: row.providerId,
-        ssn: row.ssn.trim(),
-      }))
+      const provider_products = screenshotsStep.items
+        .filter((item) => item.confirmed && !item.error)
+        .map((item) => ({
+          provider_id: item.providerId,
+          ssn: item.ssn.trim(),
+        }))
 
       await apiClient.post('/products', {
         name: wizard.name.trim(),
