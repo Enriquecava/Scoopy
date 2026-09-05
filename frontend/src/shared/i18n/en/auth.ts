@@ -13,6 +13,8 @@ export const auth = {
     invalidToken: 'No valid token was received from the API.',
     invalidCredentials: 'Invalid email or password.',
     loginFailed: 'Could not sign in.',
+    sessionExpired: 'Your session has expired. Please sign in again.',
+    forbidden: 'You do not have permission to perform this action.',
     generic: 'The products could not be loaded.',
   },
 } as const

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, PackageOpen, TrendingUp } from 'lucide-react'
+import { ArrowLeft, PackageOpen, Pencil, Save, Trash2, TrendingUp, X } from 'lucide-react'
 import { apiClient } from '../../../shared/api/client'
 import { useAuth } from '../../../app/providers/AuthProvider'
 import { useTranslation } from '../../../shared/i18n'
 
 type ProviderProduct = {
-  id: string | number
+  id?: [string | number, string | number] | string | number
   provider_id: string | number
   ssn: string | null
   provider_name: string | null
@@ -51,6 +51,18 @@ type ChartPoint = {
 type YAxisDomain = {
   min: number
   max: number
+}
+
+function providerProductKey(provider: ProviderProduct, index = 0) {
+  if (provider.provider_id !== undefined && provider.provider_id !== null) {
+    return String(provider.provider_id)
+  }
+
+  if (Array.isArray(provider.id)) {
+    return `${provider.id[0]}:${provider.id[1]}`
+  }
+
+  return String(provider.id ?? index)
 }
 
 const CHART_WIDTH = 620
@@ -141,7 +153,7 @@ function formatCurrency(value: number, locale: string, currency = 'EUR') {
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, role } = useAuth()
   const { t, locale } = useTranslation()
   const [product, setProduct] = useState<ProductDetail | null>(null)
   const [priceHistory, setPriceHistory] = useState<PriceHistoryItem[]>([])
@@ -149,6 +161,12 @@ export function ProductDetailPage() {
   const [activePoint, setActivePoint] = useState<ChartPoint | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editProviders, setEditProviders] = useState<ProviderProduct[]>([])
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -173,6 +191,8 @@ export function ProductDetailPage() {
         const historyPayload = historyResponse.data as PriceHistoryPayload
 
         setProduct(productPayload)
+        setEditName(productPayload.name)
+        setEditProviders(productPayload.providers_products ?? [])
         setPriceHistory(Array.isArray(historyPayload.price_history) ? historyPayload.price_history : [])
 
         try {
@@ -190,6 +210,57 @@ export function ProductDetailPage() {
 
     void loadProductDetail()
   }, [id, isAuthenticated, navigate])
+
+  const startEditing = () => {
+    if (!product) return
+    setEditName(product.name)
+    setEditProviders(product.providers_products ?? [])
+    setActionError(null)
+    setActionMessage(null)
+    setIsEditing(true)
+  }
+
+  const saveProduct = async () => {
+    if (!id || !editName.trim()) return
+    setIsSaving(true)
+    setActionError(null)
+    setActionMessage(null)
+    try {
+      const response = await apiClient.patch(`/products/${id}`, {
+        product: {
+          name: editName.trim(),
+          providers_products_attributes: editProviders.map((provider) => ({
+            provider_id: provider.provider_id,
+            ssn: provider.ssn?.trim() ?? '',
+          })),
+        },
+      })
+      setProduct(response.data as ProductDetail)
+      setIsEditing(false)
+      setActionMessage(t('admin.productUpdated'))
+    } catch (error: unknown) {
+      const status = typeof error === 'object' && error !== null && 'response' in error
+        ? (error as { response?: { status?: number } }).response?.status
+        : undefined
+      setActionError(status === 403 ? t('auth.errors.forbidden') : t('admin.updateError'))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const deleteProduct = async () => {
+    if (!id || !window.confirm(t('admin.deleteConfirm'))) return
+    setActionError(null)
+    try {
+      await apiClient.delete(`/products/${id}`)
+      navigate('/products', { replace: true })
+    } catch (error: unknown) {
+      const status = typeof error === 'object' && error !== null && 'response' in error
+        ? (error as { response?: { status?: number } }).response?.status
+        : undefined
+      setActionError(status === 403 ? t('auth.errors.forbidden') : t('admin.deleteError'))
+    }
+  }
 
   const lastFetchedAt = useMemo(() => {
     if (priceHistory.length === 0) {
@@ -316,6 +387,21 @@ export function ProductDetailPage() {
                 <h2 className="mt-2 text-2xl font-semibold">{product.name}</h2>
                 <p className="mt-2 text-sm text-slate-400">{t('products.detail.refreshInfo')}</p>
               </div>
+              {role === 'admin' ? (
+                <div className="flex gap-2">
+                  {isEditing ? (
+                    <>
+                      <button type="button" onClick={() => setIsEditing(false)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300"><X className="h-4 w-4" />{t('admin.cancel')}</button>
+                      <button type="button" onClick={() => void saveProduct()} disabled={isSaving} className="inline-flex items-center gap-2 rounded-xl bg-cyan-500/90 px-3 py-2 text-sm font-medium text-slate-950 disabled:opacity-50"><Save className="h-4 w-4" />{isSaving ? t('admin.savingProduct') : t('admin.saveProduct')}</button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={startEditing} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300"><Pencil className="h-4 w-4" />{t('admin.editProduct')}</button>
+                      <button type="button" onClick={() => void deleteProduct()} className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 px-3 py-2 text-sm text-rose-300"><Trash2 className="h-4 w-4" />{t('admin.deleteProduct')}</button>
+                    </>
+                  )}
+                </div>
+              ) : null}
               <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-300">
                 <div className="flex items-center gap-2">
                   <PackageOpen className="h-4 w-4" />
@@ -330,7 +416,7 @@ export function ProductDetailPage() {
                 <dl className="mt-4 space-y-3 text-sm text-slate-300">
                   <div className="flex justify-between gap-4 border-b border-white/10 pb-3">
                     <dt className="text-slate-400">{t('products.detail.name')}</dt>
-                    <dd className="font-medium text-slate-100">{product.name}</dd>
+                    <dd className="font-medium text-slate-100">{isEditing ? <input value={editName} onChange={(event) => setEditName(event.target.value)} className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-right text-slate-100 outline-none" /> : product.name}</dd>
                   </div>
                   <div className="flex justify-between gap-4 border-b border-white/10 pb-3">
                     <dt className="text-slate-400">{t('products.detail.identifier')}</dt>
@@ -343,7 +429,8 @@ export function ProductDetailPage() {
                 <h3 className="text-lg font-semibold">{t('products.detail.providers')}</h3>
                 <div className="mt-4 space-y-3">
                   {(product.providers_products ?? []).length > 0 ? (
-                    (product.providers_products ?? []).map((provider) => {
+                    (product.providers_products ?? []).map((provider, index) => {
+                      const providerKey = providerProductKey(provider, index)
                       const providerName = provider.provider_name ?? t('products.detail.provider')
                       const incident = scraperIncidents.find(
                         (item) => String(item.provider_id) === String(provider.provider_id),
@@ -353,11 +440,13 @@ export function ProductDetailPage() {
                       const isActive = !incident
 
                       return (
-                        <article key={provider.id} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+                        <article key={providerKey} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
                           <div className="flex items-center justify-between gap-3">
-                            <div>
+                            <div className="min-w-0 flex-1">
                               <p className="font-medium text-slate-100">{providerName}</p>
-                              <p className="text-sm text-slate-400">SSN: {provider.ssn ?? 'N/A'}</p>
+                              {isEditing ? (
+                                <input value={editProviders.find((item, itemIndex) => providerProductKey(item, itemIndex) === providerKey)?.ssn ?? ''} onChange={(event) => setEditProviders((current) => current.map((item, itemIndex) => providerProductKey(item, itemIndex) === providerKey ? { ...item, ssn: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1 text-sm text-slate-100 outline-none" />
+                              ) : <p className="text-sm text-slate-400">SSN: {provider.ssn ?? 'N/A'}</p>}
                             </div>
                             <span
                               className={`group relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
@@ -397,6 +486,9 @@ export function ProductDetailPage() {
             </div>
           </section>
 
+          {actionMessage ? <p className="rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-300">{actionMessage}</p> : null}
+          {actionError ? <p className="rounded-xl bg-rose-500/10 p-3 text-sm text-rose-300">{actionError}</p> : null}
+
           <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-lg shadow-slate-950/30">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-cyan-400" />
@@ -421,8 +513,8 @@ export function ProductDetailPage() {
                     <line x1={CHART_LEFT} y1={CHART_BOTTOM} x2={CHART_RIGHT} y2={CHART_BOTTOM} stroke="rgba(148,163,184,0.35)" strokeWidth="1" />
                     <line x1={CHART_LEFT} y1={CHART_TOP} x2={CHART_LEFT} y2={CHART_BOTTOM} stroke="rgba(148,163,184,0.35)" strokeWidth="1" />
 
-                    {yAxisTicks.map((tick) => (
-                      <g key={tick.label}>
+                    {yAxisTicks.map((tick, index) => (
+                      <g key={`y-axis-tick-${index}`}>
                         <line x1={CHART_LEFT} y1={tick.y} x2={CHART_RIGHT} y2={tick.y} stroke="rgba(148,163,184,0.16)" strokeDasharray="4 4" />
                         <text x="38" y={tick.y + 4} fill="#94a3b8" fontSize="10" textAnchor="end">
                           {tick.label}

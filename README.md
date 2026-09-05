@@ -60,6 +60,7 @@ flowchart LR
 For the implementation details of each part, see:
 
 - [Add Product Wizard](docs/add-product-feature.md)
+- [Admin Features](docs/admin-feature.md)
 - [Frontend README](frontend/README.md)
 - [Scoopy API README](scoopy-api/README.md)
 - [Scraper README](scraper/README.md)
