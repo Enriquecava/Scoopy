@@ -28,7 +28,5 @@ export const amazonScraper: ScraperFn = async ({context,productId,url }) => {
   } catch (error) {
     logger.error({ event: LOG_EVENT.PROVIDER_SCRAPE_FAILED, provider: 'amazon', productId, error: normalizeLogError(error) }, 'Amazon scrape failed');
     throw error;
-  } finally {
-    await context.close();
   }
 };

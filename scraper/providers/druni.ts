@@ -27,7 +27,5 @@ export const druniScraper: ScraperFn = async ({context,productId,url }) => {
   } catch (error) {
     logger.error({ event: LOG_EVENT.PROVIDER_SCRAPE_FAILED, provider: 'druni', productId, error: normalizeLogError(error) }, 'Druni scraper failed');
     throw error;
-  } finally {
-    await context.close();
   }
 };
