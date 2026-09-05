@@ -6,7 +6,7 @@ import { useAuth } from '../../../app/providers/AuthProvider'
 import { useTranslation } from '../../../shared/i18n'
 
 type ProviderProduct = {
-  id: [string | number, string | number]
+  id?: [string | number, string | number] | string | number
   provider_id: string | number
   ssn: string | null
   provider_name: string | null
@@ -53,8 +53,16 @@ type YAxisDomain = {
   max: number
 }
 
-function providerProductKey(provider: ProviderProduct) {
-  return `${provider.id[0]}:${provider.id[1]}`
+function providerProductKey(provider: ProviderProduct, index = 0) {
+  if (provider.provider_id !== undefined && provider.provider_id !== null) {
+    return String(provider.provider_id)
+  }
+
+  if (Array.isArray(provider.id)) {
+    return `${provider.id[0]}:${provider.id[1]}`
+  }
+
+  return String(provider.id ?? index)
 }
 
 const CHART_WIDTH = 620
@@ -421,7 +429,8 @@ export function ProductDetailPage() {
                 <h3 className="text-lg font-semibold">{t('products.detail.providers')}</h3>
                 <div className="mt-4 space-y-3">
                   {(product.providers_products ?? []).length > 0 ? (
-                    (product.providers_products ?? []).map((provider) => {
+                    (product.providers_products ?? []).map((provider, index) => {
+                      const providerKey = providerProductKey(provider, index)
                       const providerName = provider.provider_name ?? t('products.detail.provider')
                       const incident = scraperIncidents.find(
                         (item) => String(item.provider_id) === String(provider.provider_id),
@@ -431,12 +440,12 @@ export function ProductDetailPage() {
                       const isActive = !incident
 
                       return (
-                        <article key={providerProductKey(provider)} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+                        <article key={providerKey} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-slate-100">{providerName}</p>
                               {isEditing ? (
-                                <input value={editProviders.find((item) => providerProductKey(item) === providerProductKey(provider))?.ssn ?? ''} onChange={(event) => setEditProviders((current) => current.map((item) => providerProductKey(item) === providerProductKey(provider) ? { ...item, ssn: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1 text-sm text-slate-100 outline-none" />
+                                <input value={editProviders.find((item, itemIndex) => providerProductKey(item, itemIndex) === providerKey)?.ssn ?? ''} onChange={(event) => setEditProviders((current) => current.map((item, itemIndex) => providerProductKey(item, itemIndex) === providerKey ? { ...item, ssn: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1 text-sm text-slate-100 outline-none" />
                               ) : <p className="text-sm text-slate-400">SSN: {provider.ssn ?? 'N/A'}</p>}
                             </div>
                             <span
@@ -504,8 +513,8 @@ export function ProductDetailPage() {
                     <line x1={CHART_LEFT} y1={CHART_BOTTOM} x2={CHART_RIGHT} y2={CHART_BOTTOM} stroke="rgba(148,163,184,0.35)" strokeWidth="1" />
                     <line x1={CHART_LEFT} y1={CHART_TOP} x2={CHART_LEFT} y2={CHART_BOTTOM} stroke="rgba(148,163,184,0.35)" strokeWidth="1" />
 
-                    {yAxisTicks.map((tick) => (
-                      <g key={tick.label}>
+                    {yAxisTicks.map((tick, index) => (
+                      <g key={`y-axis-tick-${index}`}>
                         <line x1={CHART_LEFT} y1={tick.y} x2={CHART_RIGHT} y2={tick.y} stroke="rgba(148,163,184,0.16)" strokeDasharray="4 4" />
                         <text x="38" y={tick.y + 4} fill="#94a3b8" fontSize="10" textAnchor="end">
                           {tick.label}
