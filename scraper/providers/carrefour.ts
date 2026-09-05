@@ -33,8 +33,5 @@ export const carrefourScraper: ScraperFn = async ({context,productId,url }) => {
     logger.error({ event: LOG_EVENT.PROVIDER_SCRAPE_FAILED, provider: 'carrefour', productId, error: normalizeLogError(error) }, 'Carrefour scrape failed');
     throw error;
   }
-  finally{
-    await context.close()
-  }
 
 }
