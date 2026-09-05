@@ -166,9 +166,11 @@ class ProductsController < ApplicationController
       render json: e.payload, status: e.status
       return
     rescue ActiveRecord::RecordNotUnique
-      conflict = normalized_provider_products.filter_map do |provider_product_data|
-        duplicate_provider_product(provider_product_data[:provider_id], provider_product_data[:ssn])
-      end.first
+      conflict = nil
+      normalized_provider_products.each do |provider_product_data|
+        conflict = duplicate_provider_product(provider_product_data[:provider_id], provider_product_data[:ssn])
+        break if conflict
+      end
 
       render_duplicate_provider_product(conflict)
       return
@@ -227,9 +229,11 @@ class ProductsController < ApplicationController
   rescue ProductCreationError => e
     render json: e.payload, status: e.status
   rescue ActiveRecord::RecordNotUnique
-    conflict = candidate_pairs.filter_map do |provider_id, ssn|
-      duplicate_provider_product(provider_id, ssn)
-    end.first
+    conflict = nil
+    candidate_pairs.each do |provider_id, ssn|
+      conflict = duplicate_provider_product(provider_id, ssn)
+      break if conflict
+    end
 
     render_duplicate_provider_product(conflict)
   rescue ActiveRecord::RecordInvalid => e
@@ -312,37 +316,37 @@ class ProductsController < ApplicationController
   end
 
   private
-        def duplicate_provider_product(provider_id, ssn)
-          return if provider_id.blank? || ssn.blank?
+    def duplicate_provider_product(provider_id, ssn)
+      return if provider_id.blank? || ssn.blank?
 
-          ProvidersProduct.includes(:product).find_by(provider_id: provider_id, ssn: ssn)
-            &.then { |provider_product| provider_product if provider_product.product_id != @product&.id }
-        end
+      ProvidersProduct.includes(:product).find_by(provider_id: provider_id, ssn: ssn)
+        &.then { |provider_product| provider_product if provider_product.product_id != @product&.id }
+    end
 
-        def raise_duplicate_provider_product(existing)
-          raise ProductCreationError.new(
-            status: :bad_request,
-            payload: {
-              errors: [ {
-                error: "duplicate_ssn",
-                provider_id: existing.provider_id,
-                ssn: existing.ssn,
-                existing_product_id: existing.product_id,
-                product_name: existing.product.name
-              } ]
-            }
-          )
-        end
+    def raise_duplicate_provider_product(existing)
+      raise ProductCreationError.new(
+        status: :bad_request,
+        payload: {
+          errors: [ {
+            error: "duplicate_ssn",
+            provider_id: existing.provider_id,
+            ssn: existing.ssn,
+            existing_product_id: existing.product_id,
+            product_name: existing.product.name
+          } ]
+        }
+      )
+    end
 
-        def render_duplicate_provider_product(conflict)
-          if conflict
-            raise_duplicate_provider_product(conflict)
-          else
-            render json: { errors: [{ error: "provider_product_conflict" }] }, status: :unprocessable_content
-          end
-        rescue ProductCreationError => e
-          render json: e.payload, status: e.status
-        end
+    def render_duplicate_provider_product(conflict)
+      if conflict
+        raise_duplicate_provider_product(conflict)
+      else
+        render json: { errors: [{ error: "provider_product_conflict" }] }, status: :unprocessable_content
+      end
+    rescue ProductCreationError => e
+      render json: e.payload, status: e.status
+    end
 
     # Use callbacks to share common setup or constraints between actions.
     def set_product
