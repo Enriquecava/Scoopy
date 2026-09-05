@@ -195,10 +195,12 @@ class ProductsController < ApplicationController
     Product.transaction do
       @product.update!(product_params)
       Array(providers_products_attributes).each do |attributes|
-        provider_id = attributes[:provider_id] || Array(attributes[:id]).last
+        provider_id = attributes[:provider_id]
+        raise ActiveRecord::RecordNotFound if provider_id.blank?
+
         providers_product = @product.providers_products.find_by!(provider_id: provider_id)
 
-        if attributes[:_destroy]
+        if ActiveModel::Type::Boolean.new.cast(attributes[:_destroy])
           providers_product.destroy!
         else
           providers_product.update!(attributes.slice(:ssn))
@@ -214,6 +216,10 @@ class ProductsController < ApplicationController
           }
       ]
     )
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: "provider product not found" }, status: :not_found
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { errors: [{ error: "validation_failed", details: e.record.errors.full_messages }] }, status: :unprocessable_content
   end
 
   # DELETE /products/1
@@ -307,7 +313,7 @@ class ProductsController < ApplicationController
     def update_product_params
       params.require(:product).permit(
         :name,
-        providers_products_attributes: [:id, :ssn, :provider_id, :_destroy]
+        providers_products_attributes: [:ssn, :provider_id, :_destroy]
       )
     end
 end

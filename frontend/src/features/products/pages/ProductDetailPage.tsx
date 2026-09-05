@@ -6,7 +6,7 @@ import { useAuth } from '../../../app/providers/AuthProvider'
 import { useTranslation } from '../../../shared/i18n'
 
 type ProviderProduct = {
-  id: string | number
+  id: [string | number, string | number]
   provider_id: string | number
   ssn: string | null
   provider_name: string | null
@@ -51,6 +51,10 @@ type ChartPoint = {
 type YAxisDomain = {
   min: number
   max: number
+}
+
+function providerProductKey(provider: ProviderProduct) {
+  return `${provider.id[0]}:${provider.id[1]}`
 }
 
 const CHART_WIDTH = 620
@@ -218,7 +222,6 @@ export function ProductDetailPage() {
         product: {
           name: editName.trim(),
           providers_products_attributes: editProviders.map((provider) => ({
-            id: provider.id,
             provider_id: provider.provider_id,
             ssn: provider.ssn?.trim() ?? '',
           })),
@@ -428,12 +431,12 @@ export function ProductDetailPage() {
                       const isActive = !incident
 
                       return (
-                        <article key={provider.id} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+                        <article key={providerProductKey(provider)} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-slate-100">{providerName}</p>
                               {isEditing ? (
-                                <input value={editProviders.find((item) => item.id === provider.id)?.ssn ?? ''} onChange={(event) => setEditProviders((current) => current.map((item) => item.id === provider.id ? { ...item, ssn: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1 text-sm text-slate-100 outline-none" />
+                                <input value={editProviders.find((item) => providerProductKey(item) === providerProductKey(provider))?.ssn ?? ''} onChange={(event) => setEditProviders((current) => current.map((item) => providerProductKey(item) === providerProductKey(provider) ? { ...item, ssn: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-white/10 bg-slate-950 px-2 py-1 text-sm text-slate-100 outline-none" />
                               ) : <p className="text-sm text-slate-400">SSN: {provider.ssn ?? 'N/A'}</p>}
                             </div>
                             <span

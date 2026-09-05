@@ -144,13 +144,53 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference("ProvidersProduct.count") do
       patch product_url(@product), params: {
         product: {
-          providers_products_attributes: [{ id: [@product.id, provider.id], provider_id: provider.id, ssn: "UPDATED-SSN" }]
+          providers_products_attributes: [{ provider_id: provider.id, ssn: "UPDATED-SSN" }]
         }
       }, headers: @admin_auth_headers, as: :json
     end
 
     assert_response :success
     assert_equal "UPDATED-SSN", providers_product.reload.ssn
+  end
+
+  test "should destroy an existing provider product when _destroy is true" do
+    provider = Provider.create!(name: "Delete provider", url: "https://delete.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "12345")
+
+    assert_difference("ProvidersProduct.count", -1) do
+      patch product_url(@product), params: {
+        product: {
+          providers_products_attributes: [{ provider_id: provider.id, _destroy: "true" }]
+        }
+      }, headers: @admin_auth_headers, as: :json
+    end
+
+    assert_response :success
+    assert_not ProvidersProduct.exists?(product_id: @product.id, provider_id: provider.id)
+  end
+
+  test "should not destroy a provider product when _destroy is false" do
+    provider = Provider.create!(name: "Keep provider", url: "https://keep.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "12345")
+
+    assert_no_difference("ProvidersProduct.count") do
+      patch product_url(@product), params: {
+        product: {
+          providers_products_attributes: [{ provider_id: provider.id, _destroy: "false", ssn: "UPDATED-SSN" }]
+        }
+      }, headers: @admin_auth_headers, as: :json
+    end
+
+    assert_response :success
+    assert_equal "UPDATED-SSN", providers_product.reload.ssn
+  end
+
+  test "should return not found when updating a missing provider product" do
+    patch product_url(@product), params: {
+      product: { providers_products_attributes: [{ provider_id: -1, ssn: "UPDATED-SSN" }] }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :not_found
   end
 
   test "should forbid a regular user from updating a product" do

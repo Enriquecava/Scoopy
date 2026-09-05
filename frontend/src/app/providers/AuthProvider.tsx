@@ -64,6 +64,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token])
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
     const handleUnauthorized = () => {
       sessionStorage.removeItem(STORAGE_KEY)
       sessionStorage.removeItem(ROLE_STORAGE_KEY)
