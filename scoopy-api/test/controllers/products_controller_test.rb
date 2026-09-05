@@ -1,6 +1,18 @@
 require "test_helper"
 
 class ProductsControllerTest < ActionDispatch::IntegrationTest
+  module ConcurrentSaveFailure
+    def save!(...)
+      if Thread.current[:simulate_providers_product_save_conflict]
+        raise ActiveRecord::RecordNotUnique
+      end
+
+      super
+    end
+  end
+
+  ProvidersProduct.prepend(ConcurrentSaveFailure) unless ProvidersProduct.ancestors.include?(ConcurrentSaveFailure)
+
   setup do
     @product = products(:one)
     @user = User.create!(email: "products.user.#{SecureRandom.uuid}@example.com", password: "123456")
@@ -141,8 +153,7 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     provider = Provider.create!(name: "Concurrent provider", url: "https://concurrent.example.com")
     existing_product = Product.create!(name: "Concurrent existing product")
     existing_product.providers_products.create!(provider: provider, ssn: "CONCURRENT-SSN")
-    original_save = ProvidersProduct.instance_method(:save!)
-    ProvidersProduct.define_method(:save!) { raise ActiveRecord::RecordNotUnique }
+    Thread.current[:simulate_providers_product_save_conflict] = true
 
     post products_url, params: {
       name: "Concurrent product",
@@ -152,7 +163,7 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_response :bad_request
     assert_equal "duplicate_ssn", response.parsed_body.dig("errors", 0, "error")
   ensure
-    ProvidersProduct.define_method(:save!, original_save) if original_save
+    Thread.current[:simulate_providers_product_save_conflict] = false
   end
 
   test "should show product with providers_products" do
