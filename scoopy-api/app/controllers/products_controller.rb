@@ -166,11 +166,13 @@ class ProductsController < ApplicationController
       render json: e.payload, status: e.status
       return
     rescue ActiveRecord::RecordNotUnique
-      render json: {
-        errors: [ {
-          error: "provider_product_conflict"
-        } ]
-      }, status: :unprocessable_content
+      conflict = nil
+      normalized_provider_products.each do |provider_product_data|
+        conflict = duplicate_provider_product(provider_product_data[:provider_id], provider_product_data[:ssn])
+        break if conflict
+      end
+
+      render_duplicate_provider_product(conflict)
       return
     rescue ActiveRecord::RecordInvalid => e
       render json: { errors: [ { error: "validation_failed", details: e.record.errors.full_messages } ] }, status: :unprocessable_content
@@ -191,6 +193,7 @@ class ProductsController < ApplicationController
   def update
     product_params = update_product_params
     providers_products_attributes = product_params.delete(:providers_products_attributes)
+    candidate_pairs = []
 
     Product.transaction do
       @product.update!(product_params)
@@ -202,8 +205,18 @@ class ProductsController < ApplicationController
 
         if ActiveModel::Type::Boolean.new.cast(attributes[:_destroy])
           providers_product.destroy!
-        else
-          providers_product.update!(attributes.slice(:ssn))
+        elsif attributes.key?(:ssn)
+          normalized_ssn = attributes[:ssn].to_s.strip
+          raise ProductCreationError.new(
+            status: :bad_request,
+            payload: { error: "ssn cannot be blank" }
+          ) if normalized_ssn.blank?
+
+          candidate_pairs << [provider_id, normalized_ssn]
+          existing = duplicate_provider_product(provider_id, normalized_ssn)
+          raise_duplicate_provider_product(existing) if existing
+
+          providers_product.update!(ssn: normalized_ssn)
         end
       end
     end
@@ -218,6 +231,16 @@ class ProductsController < ApplicationController
     )
   rescue ActiveRecord::RecordNotFound
     render json: { error: "provider product not found" }, status: :not_found
+  rescue ProductCreationError => e
+    render json: e.payload, status: e.status
+  rescue ActiveRecord::RecordNotUnique
+    conflict = nil
+    candidate_pairs.each do |provider_id, ssn|
+      conflict = duplicate_provider_product(provider_id, ssn)
+      break if conflict
+    end
+
+    render_duplicate_provider_product(conflict)
   rescue ActiveRecord::RecordInvalid => e
     render json: { errors: [{ error: "validation_failed", details: e.record.errors.full_messages }] }, status: :unprocessable_content
   end
@@ -298,6 +321,38 @@ class ProductsController < ApplicationController
   end
 
   private
+    def duplicate_provider_product(provider_id, ssn)
+      return if provider_id.blank? || ssn.blank?
+
+      ProvidersProduct.includes(:product).find_by(provider_id: provider_id, ssn: ssn)
+        &.then { |provider_product| provider_product if provider_product.product_id != @product&.id }
+    end
+
+    def raise_duplicate_provider_product(existing)
+      raise ProductCreationError.new(
+        status: :bad_request,
+        payload: {
+          errors: [ {
+            error: "duplicate_ssn",
+            provider_id: existing.provider_id,
+            ssn: existing.ssn,
+            existing_product_id: existing.product_id,
+            product_name: existing.product.name
+          } ]
+        }
+      )
+    end
+
+    def render_duplicate_provider_product(conflict)
+      if conflict
+        raise_duplicate_provider_product(conflict)
+      else
+        render json: { errors: [{ error: "provider_product_conflict" }] }, status: :unprocessable_content
+      end
+    rescue ProductCreationError => e
+      render json: e.payload, status: e.status
+    end
+
     # Use callbacks to share common setup or constraints between actions.
     def set_product
       @product = Product.find(params.expect(:id))

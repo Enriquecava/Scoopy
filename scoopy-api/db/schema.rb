@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_02_000006) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_05_000007) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -52,6 +52,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_02_000006) do
     t.datetime "updated_at", null: false
     t.index ["product_id", "provider_id"], name: "index_providers_products_on_product_id_and_provider_id", unique: true
     t.index ["product_id"], name: "index_providers_products_on_product_id"
+    t.index ["provider_id", "ssn"], name: "index_providers_products_on_provider_id_and_ssn", unique: true
     t.index ["provider_id"], name: "index_providers_products_on_provider_id"
   end
 
@@ -64,7 +65,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_02_000006) do
     t.index ["product_id"], name: "index_scraper_incidents_on_product_id"
     t.index ["provider_id", "product_id"], name: "index_scraper_incidents_on_open_provider_and_product", unique: true, where: "((status)::text = 'open'::text)"
     t.index ["provider_id"], name: "index_scraper_incidents_on_provider_id"
-    t.check_constraint "status::text = ANY (ARRAY['open'::character varying::text, 'resolved'::character varying::text])", name: "scraper_incidents_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['open'::character varying, 'resolved'::character varying]::text[])", name: "scraper_incidents_status_check"
   end
 
   create_table "users", force: :cascade do |t|

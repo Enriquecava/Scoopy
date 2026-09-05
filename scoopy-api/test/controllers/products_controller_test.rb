@@ -1,6 +1,18 @@
 require "test_helper"
 
 class ProductsControllerTest < ActionDispatch::IntegrationTest
+  module ConcurrentSaveFailure
+    def save!(...)
+      if Thread.current[:simulate_providers_product_save_conflict]
+        raise ActiveRecord::RecordNotUnique
+      end
+
+      super
+    end
+  end
+
+  ProvidersProduct.prepend(ConcurrentSaveFailure) unless ProvidersProduct.ancestors.include?(ConcurrentSaveFailure)
+
   setup do
     @product = products(:one)
     @user = User.create!(email: "products.user.#{SecureRandom.uuid}@example.com", password: "123456")
@@ -120,6 +132,40 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_response :created
   end
 
+  test "should reject creating a duplicate provider and SSN pair" do
+    provider = Provider.create!(name: "Duplicate provider", url: "https://duplicate.example.com")
+    existing_product = Product.create!(name: "Existing product")
+    existing_product.providers_products.create!(provider: provider, ssn: "DUPLICATE-SSN")
+
+    assert_no_difference("Product.count") do
+      post products_url, params: {
+        name: "Duplicate product",
+        provider_products: [{ provider_id: provider.id, ssn: "DUPLICATE-SSN" }]
+      }, headers: @auth_headers, as: :json
+    end
+
+    assert_response :bad_request
+    assert_equal "duplicate_ssn", response.parsed_body.dig("errors", 0, "error")
+    assert_equal existing_product.id, response.parsed_body.dig("errors", 0, "existing_product_id")
+  end
+
+  test "should translate a concurrent provider and SSN conflict" do
+    provider = Provider.create!(name: "Concurrent provider", url: "https://concurrent.example.com")
+    existing_product = Product.create!(name: "Concurrent existing product")
+    existing_product.providers_products.create!(provider: provider, ssn: "CONCURRENT-SSN")
+    Thread.current[:simulate_providers_product_save_conflict] = true
+
+    post products_url, params: {
+      name: "Concurrent product",
+      provider_products: [{ provider_id: provider.id, ssn: "CONCURRENT-SSN" }]
+    }, headers: @auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "duplicate_ssn", response.parsed_body.dig("errors", 0, "error")
+  ensure
+    Thread.current[:simulate_providers_product_save_conflict] = false
+  end
+
   test "should show product with providers_products" do
     product = Product.create!(name: "Example product")
     provider = Provider.create!(name: "Example provider", url: "https://example.com")
@@ -144,13 +190,76 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference("ProvidersProduct.count") do
       patch product_url(@product), params: {
         product: {
-          providers_products_attributes: [{ provider_id: provider.id, ssn: "UPDATED-SSN" }]
+          providers_products_attributes: [{ provider_id: provider.id, ssn: " UPDATED-SSN " }]
         }
       }, headers: @admin_auth_headers, as: :json
     end
 
     assert_response :success
     assert_equal "UPDATED-SSN", providers_product.reload.ssn
+  end
+
+  test "should reject updating to a provider and SSN pair used by another product" do
+    provider = Provider.create!(name: "Duplicate update provider", url: "https://duplicate-update.example.com")
+    other_product = Product.create!(name: "Other product")
+    other_product.providers_products.create!(provider: provider, ssn: "TAKEN-SSN")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "AVAILABLE-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id, ssn: "TAKEN-SSN" }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "duplicate_ssn", response.parsed_body.dig("errors", 0, "error")
+    assert_equal "AVAILABLE-SSN", providers_product.reload.ssn
+  end
+
+  test "should normalize SSN before checking duplicate provider pairs on update" do
+    provider = Provider.create!(name: "Normalized update provider", url: "https://normalized-update.example.com")
+    other_product = Product.create!(name: "Normalized other product")
+    other_product.providers_products.create!(provider: provider, ssn: "TAKEN-SSN")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "AVAILABLE-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id, ssn: " TAKEN-SSN " }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "duplicate_ssn", response.parsed_body.dig("errors", 0, "error")
+    assert_equal "AVAILABLE-SSN", providers_product.reload.ssn
+  end
+
+  test "should preserve SSN when it is omitted from an update" do
+    provider = Provider.create!(name: "Omitted SSN provider", url: "https://omitted-ssn.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "UNCHANGED-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :success
+    assert_equal "UNCHANGED-SSN", providers_product.reload.ssn
+  end
+
+  test "should reject a blank SSN on update without clearing the existing value" do
+    provider = Provider.create!(name: "Blank SSN provider", url: "https://blank-ssn.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "UNCHANGED-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id, ssn: "   " }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "ssn cannot be blank", response.parsed_body["error"]
+    assert_equal "UNCHANGED-SSN", providers_product.reload.ssn
   end
 
   test "should destroy an existing provider product when _destroy is true" do
