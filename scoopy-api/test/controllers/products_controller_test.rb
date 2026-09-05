@@ -179,7 +179,7 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference("ProvidersProduct.count") do
       patch product_url(@product), params: {
         product: {
-          providers_products_attributes: [{ provider_id: provider.id, ssn: "UPDATED-SSN" }]
+          providers_products_attributes: [{ provider_id: provider.id, ssn: " UPDATED-SSN " }]
         }
       }, headers: @admin_auth_headers, as: :json
     end
@@ -197,6 +197,23 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     patch product_url(@product), params: {
       product: {
         providers_products_attributes: [{ provider_id: provider.id, ssn: "TAKEN-SSN" }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "duplicate_ssn", response.parsed_body.dig("errors", 0, "error")
+    assert_equal "AVAILABLE-SSN", providers_product.reload.ssn
+  end
+
+  test "should normalize SSN before checking duplicate provider pairs on update" do
+    provider = Provider.create!(name: "Normalized update provider", url: "https://normalized-update.example.com")
+    other_product = Product.create!(name: "Normalized other product")
+    other_product.providers_products.create!(provider: provider, ssn: "TAKEN-SSN")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "AVAILABLE-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id, ssn: " TAKEN-SSN " }]
       }
     }, headers: @admin_auth_headers, as: :json
 

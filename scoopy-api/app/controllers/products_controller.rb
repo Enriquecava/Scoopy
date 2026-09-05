@@ -204,11 +204,12 @@ class ProductsController < ApplicationController
         if ActiveModel::Type::Boolean.new.cast(attributes[:_destroy])
           providers_product.destroy!
         else
-          candidate_pairs << [provider_id, attributes[:ssn]] if attributes[:ssn].present?
-          existing = duplicate_provider_product(provider_id, attributes[:ssn])
+          normalized_ssn = attributes[:ssn].to_s.strip
+          candidate_pairs << [provider_id, normalized_ssn] if normalized_ssn.present?
+          existing = duplicate_provider_product(provider_id, normalized_ssn)
           raise_duplicate_provider_product(existing) if existing
 
-          providers_product.update!(attributes.slice(:ssn))
+          providers_product.update!(attributes.slice(:ssn).merge(ssn: normalized_ssn))
         end
       end
     end
