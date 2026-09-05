@@ -51,13 +51,13 @@ export async function scrapeAndStoreProductPrice(
 
   for (let attempt = 1; attempt <= MAX_SCRAPER_RETRIES; attempt += 1) {
     const context = await browser.newContext(contextConfig);
-    await context.addInitScript(()=>{
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false,
-      })
-    })
 
     try {
+      await context.addInitScript(()=>{
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => false,
+        })
+      })
       const price = await scraper({ context: context, productId: asin, url: url });
       await context.close();
       await closeScraperIncident({ provider_id, product_id, asin });
