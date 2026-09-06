@@ -153,7 +153,7 @@ export function useProductScreenshotsStep({
         setItems([])
       }
     } finally {
-      if (!signal.aborted) {
+      if (verificationAbortControllerRef.current?.signal === signal) {
         setLoading(false)
       }
     }
@@ -208,6 +208,7 @@ export function useProductScreenshotsStep({
   const reset = useCallback(() => {
     verificationAbortControllerRef.current?.abort()
     verificationAbortControllerRef.current = null
+    setLoading(false)
     setItems([])
     setError(null)
     setExitConfirmOpen(false)
