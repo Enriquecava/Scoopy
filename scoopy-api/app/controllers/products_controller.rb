@@ -1,4 +1,6 @@
 class ProductsController < ApplicationController
+  VERIFICATION_REQUESTS_PER_MINUTE = 5
+
   class ProductCreationError < StandardError
     attr_reader :status, :payload
 
@@ -301,23 +303,55 @@ class ProductsController < ApplicationController
     payload = request.body.read
     items = payload.present? ? JSON.parse(payload) : []
 
-    if !items.is_a?(Array) || !items.size.between?(1, ProductVerificationService::MAX_BATCH_SIZE)
-      render json: { error: "Request must include between 1 and #{ProductVerificationService::MAX_BATCH_SIZE} items" }, status: :bad_request
+    ProductVerificationService.validate_items!(items)
+
+    batch = nil
+    rate_limited = false
+
+    User.transaction do
+      user = User.lock.find(current_user.id)
+      recent_requests = user.product_verification_batches.where("created_at >= ?", 1.minute.ago).count
+      active_batch = user.product_verification_batches.where(status: %w[pending processing]).exists?
+
+      if recent_requests >= VERIFICATION_REQUESTS_PER_MINUTE || active_batch
+        rate_limited = true
+        next
+      end
+
+      batch = user.product_verification_batches.create!(total: items.size)
+      items.each_with_index do |item, index|
+        item = {} unless item.is_a?(Hash)
+        batch.items.create!(
+          position: index,
+          provider_id: item["provider_id"] || item[:provider_id],
+          ssn: item["ssn"] || item[:ssn]
+        )
+      end
+    end
+
+    if rate_limited
+      response.set_header("Retry-After", "60")
+      render json: { error: "rate_limited" }, status: :too_many_requests
       return
     end
 
-    result = ProductVerificationService.verify_batch(items)
-
-    if result[:meta][:all_failed]
-      render json: result, status: :bad_request
-      return
-    end
-
-    render json: result, status: :ok
+    render json: { id: batch.id, status: batch.status }, status: :accepted
   rescue JSON::ParserError
     render json: { error: "Invalid JSON payload" }, status: :bad_request
   rescue ArgumentError => e
     render json: { error: e.message }, status: :bad_request
+  rescue ActiveRecord::RecordNotUnique
+    response.set_header("Retry-After", "60")
+    render json: { error: "rate_limited" }, status: :too_many_requests
+  rescue ProductVerificationBatch::QueueingError
+    render json: { error: "verification_unavailable" }, status: :service_unavailable
+  end
+
+  def verification_batch
+    batch = current_user.product_verification_batches.find(params[:id])
+    render json: batch.response_payload, status: :ok
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: "Verification batch not found" }, status: :not_found
   end
 
   private

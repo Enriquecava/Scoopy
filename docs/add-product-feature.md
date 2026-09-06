@@ -12,9 +12,9 @@ flowchart LR
     B --> C[GET /providers]
     B --> D[3. Verify product]
     D --> E[POST /products/verify]
-    E --> F[Rails ProductVerificationService]
-    F --> G[Playwright verifier]
-    G --> H[Temporary screenshot]
+    E --> F[Create verification batch]
+    F --> G[Solid Queue item jobs]
+    G --> H[Playwright verifier]
     H --> I[User confirms matches]
     I --> J[4. Create product]
     J --> K[POST /products]
@@ -40,7 +40,7 @@ When this step opens, the frontend loads the available providers with `GET /prov
 
 ### Step 3: Validate screenshots
 
-The wizard sends all provider/SSN pairs to `POST /products/verify`. The backend runs the provider-specific Playwright verifier for each pair and returns a temporary screenshot for every successful match.
+The wizard sends all provider/SSN pairs to `POST /products/verify`. The endpoint creates a verification batch and returns immediately. The frontend polls the batch status while Solid Queue runs each provider/SSN pair with a global concurrency limit, then displays a temporary screenshot for every successful match.
 
 Review each screenshot and select **Confirm match** for every successful item. Items with an error cannot be confirmed. The **Add product** action is enabled only when every returned item has been confirmed.
 
@@ -123,10 +123,25 @@ Request:
 ]
 ```
 
-Successful response (`200 OK`):
+Accepted response (`202 Accepted`):
 
 ```json
 {
+  "id": 42,
+  "status": "pending"
+}
+```
+
+The batch is limited to one active batch per user and five requests per minute. Excess requests return `429 Too Many Requests` with `error: "rate_limited"` and a `Retry-After` header. Invalid JSON, an empty batch, more than five items, or repeated provider ids return `400`.
+
+### `GET /products/verification_batches/:id`
+
+Returns the status of a batch owned by the authenticated user:
+
+```json
+{
+  "id": 42,
+  "status": "completed",
   "data": [
     {
       "provider_id": 1,
@@ -139,13 +154,13 @@ Successful response (`200 OK`):
 }
 ```
 
-Item-level failures use `error` values such as `duplicate_ssn` or `verification_failed`. A duplicate includes `product_name`. If every item fails, the endpoint returns `400 Bad Request` with the same `data`/`meta` structure and `meta.all_failed: true`. Invalid JSON, an empty batch, more than five items, or repeated provider ids also return `400`.
+While work is pending, `status` is `pending` or `processing` and `data` contains the current item results. Item-level failures use `error` values such as `duplicate_ssn` or `verification_failed`. A duplicate includes `product_name`. If every item fails, the batch remains `completed` and `meta.all_failed` is `true`; the frontend shows a retry action.
 
 ### `GET /screenshots/:filename`
 
 Serves a generated PNG inline for the screenshot URL returned by verification. The filename must be a UUID ending in `.png`; invalid or expired files return `404`. This route is authenticated and reads only from the temporary screenshot directory.
 
-There is no separate `POST /products/screenshots` route in the current implementation. Screenshot generation is part of `POST /products/verify`, while `GET /screenshots/:filename` serves the generated image.
+There is no separate `POST /products/screenshots` route. Screenshot generation is queued by `POST /products/verify`, while `GET /screenshots/:filename` serves the generated image.
 
 ### `POST /products`
 
@@ -189,7 +204,7 @@ The backend validates the name, requires at least one association, validates eve
 }
 ```
 
-Other validation errors return `400` or `422` depending on whether the request shape or persisted record is invalid. Unauthenticated requests return `401`. No rate limiting is implemented by these endpoints.
+Other validation errors return `400` or `422` depending on whether the request shape or persisted record is invalid. Unauthenticated requests return `401`.
 
 ## Frontend Implementation
 
@@ -199,14 +214,14 @@ The feature lives under `frontend/src/features/products/`:
 - `AddProductWizardModal.tsx` coordinates the four steps, calls `POST /products`, handles cancellation, and refreshes the product list.
 - `useAddProductWizard.ts` owns the current step, product name validation, navigation, and reset behavior.
 - `useAddProductProvidersStep.ts` lazily loads providers, manages provider/SSN rows, prevents duplicate providers, and exposes validity state.
-- `useProductScreenshotsStep.ts` calls verification when step 3 becomes active, normalizes results, handles retries and duplicate SSN messages, and tracks confirmations.
+- `useProductScreenshotsStep.ts` creates a verification batch when step 3 becomes active, polls until completion, normalizes results, handles retries, rate limits, and duplicate SSN messages, and tracks confirmations.
 - `ProvidersStep.tsx` and `ScreenshotsStep.tsx` render the provider form and screenshot review UI.
 
 The wizard keeps its state locally in React hooks. Moving back from the screenshot step preserves the provider form. Cancelling resets all state; removing the last screenshot asks for confirmation before returning to the provider step or exiting.
 
 ## Testing and Maintenance
 
-Backend controller tests cover malformed verification payloads, the five-item limit, duplicate provider ids, all-failed verification, authentication, screenshot filename validation, and product creation. Future changes should add tests for the relevant controller, service, or hook behavior.
+Backend controller and job tests cover malformed verification payloads, the five-item limit, duplicate provider ids, asynchronous batch ownership/status, per-user rate limiting, authentication, screenshot filename validation, and product creation. `ProductVerificationItemJob` emits the `product_verification.item` Active Support notification with status and duration fields for metrics subscribers.
 
 When changing a provider verifier, validate both the provider-specific scraper flow and the API path that invokes it. Keep temporary screenshot cleanup and the 30-second verifier process timeout in mind when diagnosing failures.
 

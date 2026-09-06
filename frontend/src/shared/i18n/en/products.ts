@@ -20,6 +20,7 @@ export const products = {
     removeProvider: 'Remove provider',
     addProvider: 'Add provider',
     screenshotsVerifyError: 'Could not verify products.',
+    screenshotsRateLimited: 'A verification is already running or you have reached the temporary limit. Please wait and try again.',
     screenshotsLoading: 'Verifying products...',
     screenshotsRetry: 'Retry',
     screenshotsAllFailed: 'No product could be verified. Go back or try again.',

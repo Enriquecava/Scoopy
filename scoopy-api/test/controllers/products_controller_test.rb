@@ -91,20 +91,72 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Request must include between 1 and 5 items", response.parsed_body["error"]
   end
 
-  test "should return 400 when all verification items fail" do
-    original_verify_batch = ProductVerificationService.method(:verify_batch)
-    ProductVerificationService.singleton_class.define_method(:verify_batch) do |_items|
-      { data: [], meta: { all_failed: true } }
+  test "should enqueue verification and return an accepted batch" do
+    assert_enqueued_with(job: ProductVerificationItemJob) do
+      post verify_products_url, params: [{ provider_id: 1, ssn: "ABC123" }].to_json, headers: @auth_headers.merge("CONTENT_TYPE" => "application/json")
+    end
+
+    assert_response :accepted
+    assert_equal "pending", response.parsed_body["status"]
+    assert_equal 1, ProductVerificationBatch.last.items.count
+  end
+
+  test "should rate limit recent verification requests" do
+    5.times do
+      ProductVerificationBatch.create!(user: @user, status: :completed, total: 1, success_count: 1)
+    end
+
+    post verify_products_url, params: [{ provider_id: 1, ssn: "ABC123" }].to_json, headers: @auth_headers.merge("CONTENT_TYPE" => "application/json")
+
+    assert_response :too_many_requests
+    assert_equal "rate_limited", response.parsed_body["error"]
+  end
+
+  test "should return service unavailable when verification cannot be queued" do
+    original_perform_later = ProductVerificationItemJob.method(:perform_later)
+    ProductVerificationItemJob.singleton_class.define_method(:perform_later) do |_item_id|
+      raise ActiveJob::EnqueueError, "queue unavailable"
     end
 
     begin
       post verify_products_url, params: [{ provider_id: 1, ssn: "ABC123" }].to_json, headers: @auth_headers.merge("CONTENT_TYPE" => "application/json")
     ensure
-      ProductVerificationService.singleton_class.define_method(:verify_batch, original_verify_batch)
+      ProductVerificationItemJob.singleton_class.define_method(:perform_later, original_perform_later)
     end
 
-    assert_response :bad_request
-    assert_equal true, response.parsed_body.dig("meta", "all_failed")
+    assert_response :service_unavailable
+    assert_equal "verification_unavailable", response.parsed_body["error"]
+    assert ProductVerificationBatch.last.failed?
+  end
+
+  test "should return the verification batch status to its owner" do
+    batch = ProductVerificationBatch.create!(user: @user, status: :completed, total: 1, success_count: 1)
+    batch.items.create!(position: 0, provider_id: "1", ssn: "ABC123", status: :completed, screenshot: "/screenshots/example.png")
+
+    get "/products/verification_batches/#{batch.id}", headers: @auth_headers, as: :json
+
+    assert_response :success
+    assert_equal "completed", response.parsed_body["status"]
+    assert_equal "/screenshots/example.png", response.parsed_body.dig("data", 0, "screenshot")
+  end
+
+  test "should not mark an in-progress verification batch as all failed" do
+    batch = ProductVerificationBatch.create!(user: @user, status: :pending, total: 1)
+
+    get "/products/verification_batches/#{batch.id}", headers: @auth_headers, as: :json
+
+    assert_response :success
+    assert_equal "pending", response.parsed_body["status"]
+    assert_equal false, response.parsed_body.dig("meta", "all_failed")
+  end
+
+  test "should not expose another user's verification batch" do
+    other_user = User.create!(email: "other.products.user.#{SecureRandom.uuid}@example.com", password: "123456")
+    batch = ProductVerificationBatch.create!(user: other_user, status: :pending, total: 1)
+
+    get "/products/verification_batches/#{batch.id}", headers: @auth_headers, as: :json
+
+    assert_response :not_found
   end
 
   test "should reject invalid screenshot filenames with 404" do
