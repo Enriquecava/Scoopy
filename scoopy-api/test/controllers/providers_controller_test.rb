@@ -4,6 +4,10 @@ class ProvidersControllerTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
   setup do
+    PriceHistory.delete_all
+    ProvidersProduct.delete_all
+    ScraperIncident.delete_all
+    Provider.delete_all
     @user = User.create!(email: "providers.user@example.com", password: "123456")
     @auth_headers = {
       "Authorization" => "Bearer #{sign_in(@user)}"
