@@ -5,7 +5,7 @@ class ProductVerificationService
   PROCESS_TIMEOUT_SECONDS = 30
 
   class << self
-    def verify_batch(items)
+    def validate_items!(items)
       raise ArgumentError, "Request must include between 1 and #{MAX_BATCH_SIZE} items" if items.nil? || !items.is_a?(Array) || !items.size.between?(1, MAX_BATCH_SIZE)
 
       provider_ids = items.filter_map do |item|
@@ -18,6 +18,14 @@ class ProductVerificationService
       if provider_ids.length != provider_ids.uniq.length
         raise ArgumentError, "Duplicate provider_id values are not allowed"
       end
+    end
+
+    def verify_item(item)
+      process_item(item)
+    end
+
+    def verify_batch(items)
+      validate_items!(items)
 
       threads = items.map do |item|
         Thread.new do
@@ -134,7 +142,7 @@ class ProductVerificationService
 
       begin
         Timeout.timeout(PROCESS_TIMEOUT_SECONDS) do
-          Open3.popen3("npx", "--no-install", "tsx", "--eval", script, chdir: Rails.root.parent.to_s) do |_stdin, stdout_io, stderr_io, wait_thr|
+          Open3.popen3("npx", "--no-install", "tsx", "--eval", script, chdir: Rails.root.parent.to_s, pgroup: true) do |_stdin, stdout_io, stderr_io, wait_thr|
             pid = wait_thr.pid
             stdout_reader = Thread.new { stdout_io.read }
             stderr_reader = Thread.new { stderr_io.read }
@@ -145,7 +153,7 @@ class ProductVerificationService
         end
       rescue Timeout::Error
         begin
-          Process.kill("TERM", pid) if pid
+          Process.kill("TERM", -pid) if pid
         rescue Errno::ESRCH
           # Process already terminated
         end

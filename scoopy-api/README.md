@@ -19,6 +19,7 @@ We use Rails to move quickly with strong conventions and PostgreSQL integration.
 - Ruby on Rails `~> 8.1.3`
 - PostgreSQL
 - Devise + devise-jwt
+- Solid Queue
 - Rack CORS
 
 ## Project Structure
@@ -86,11 +87,32 @@ If the database already exists:
 bundle exec rails db:migrate
 ```
 
-### Start the Server
+### Start the API and Solid Queue
+
+The API and Solid Queue must run as two processes. The API accepts verification requests, while Solid Queue processes the scraper jobs asynchronously. Keep both terminals running.
+
+From the `scoopy-api` directory, start the Rails API in the first terminal:
 
 ```bash
-bundle exec rails server
+RAILS_ENV=production bundle exec rails s
 ```
+
+Then start Solid Queue in a second terminal.
+
+On Linux:
+
+```bash
+RAILS_ENV=production bundle exec rails solid_queue:start
+```
+
+On macOS, use async supervisor mode to avoid Ruby `fork` crashes:
+
+```bash
+SOLID_QUEUE_SUPERVISOR_MODE=async \
+RAILS_ENV=production bundle exec rails solid_queue:start
+```
+
+Do not start only the Rails process. Without Solid Queue, verification requests return `202 Accepted` but remain pending because the scraper jobs are not processed.
 
 Default URL: `http://localhost:3000`
 

@@ -20,6 +20,7 @@ export const products = {
     removeProvider: 'Eliminar proveedor',
     addProvider: 'Añadir proveedor',
     screenshotsVerifyError: 'No se pudieron verificar los productos.',
+    screenshotsRateLimited: 'Ya tienes una verificación en curso o has alcanzado el límite temporal. Espera un momento e inténtalo de nuevo.',
     screenshotsLoading: 'Verificando productos...',
     screenshotsRetry: 'Reintentar',
     screenshotsAllFailed: 'No se pudo verificar ningún producto. Vuelve atrás o inténtalo de nuevo.',

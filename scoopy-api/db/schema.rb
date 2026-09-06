@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_05_000007) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_05_000008) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -29,6 +29,41 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_05_000007) do
     t.datetime "updated_at", null: false
     t.index ["product_id"], name: "index_price_histories_on_product_id"
     t.index ["provider_id"], name: "index_price_histories_on_provider_id"
+  end
+
+  create_table "product_verification_batches", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "error"
+    t.integer "failed_count", default: 0, null: false
+    t.datetime "finished_at"
+    t.datetime "started_at"
+    t.string "status", default: "pending", null: false
+    t.integer "success_count", default: 0, null: false
+    t.integer "total", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["user_id", "created_at"], name: "index_product_verification_batches_on_user_id_and_created_at"
+    t.index ["user_id"], name: "index_product_verification_batches_on_user_id"
+    t.index ["user_id"], name: "index_verification_batches_on_active_user", unique: true, where: "((status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying])::text[]))"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'processing'::character varying, 'completed'::character varying, 'failed'::character varying]::text[])", name: "product_verification_batches_status_check"
+  end
+
+  create_table "product_verification_items", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "finished_at"
+    t.integer "position", null: false
+    t.string "product_name"
+    t.bigint "product_verification_batch_id", null: false
+    t.string "provider_id"
+    t.string "screenshot"
+    t.string "ssn"
+    t.datetime "started_at"
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.string "verification_error"
+    t.index ["product_verification_batch_id", "position"], name: "index_verification_items_on_batch_and_position", unique: true
+    t.index ["product_verification_batch_id"], name: "idx_on_product_verification_batch_id_aa84ad99cf"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'processing'::character varying, 'completed'::character varying, 'failed'::character varying]::text[])", name: "product_verification_items_status_check"
   end
 
   create_table "products", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -84,6 +119,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_05_000007) do
 
   add_foreign_key "price_histories", "products"
   add_foreign_key "price_histories", "providers"
+  add_foreign_key "product_verification_batches", "users"
+  add_foreign_key "product_verification_items", "product_verification_batches"
   add_foreign_key "providers_products", "products"
   add_foreign_key "providers_products", "providers"
   add_foreign_key "scraper_incidents", "products"

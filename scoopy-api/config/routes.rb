@@ -11,6 +11,7 @@ Rails.application.routes.draw do
   resources :products, defaults: { format: :json } do
     collection do
       post :verify
+      get "verification_batches/:id", action: :verification_batch, as: :verification_batch
     end
 
     member do

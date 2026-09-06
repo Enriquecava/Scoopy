@@ -18,25 +18,23 @@ test:
   password: postgres
 
 production:
-  <<: *default
-  database: <%= ENV.fetch("PGDATABASE", "scoopy") %>
-  username: <%= ENV.fetch("PGUSER", "admin") %>
-  password: <%= ENV.fetch("PGPASSWORD", "") %>
-
-queue:
-  <<: *default
-  database: <%= ENV.fetch("PGDATABASE", "scoopy") %>
-  username: <%= ENV.fetch("PGUSER", "admin") %>
-  password: <%= ENV.fetch("PGPASSWORD", "") %>
-
-cache:
-  <<: *default
-  database: <%= ENV.fetch("PGDATABASE", "scoopy") %>
-  username: <%= ENV.fetch("PGUSER", "admin") %>
-  password: <%= ENV.fetch("PGPASSWORD", "") %>
-
-cable:
-  <<: *default
-  database: <%= ENV.fetch("PGDATABASE", "scoopy") %>
-  username: <%= ENV.fetch("PGUSER", "admin") %>
-  password: <%= ENV.fetch("PGPASSWORD", "") %>
+  primary:
+    <<: *default
+    database: <%= ENV.fetch("PGDATABASE", "scoopy") %>
+    username: <%= ENV.fetch("PGUSER", "admin") %>
+    password: <%= ENV.fetch("PGPASSWORD", "") %>
+  queue:
+    <<: *default
+    database: <%= ENV.fetch("PGDATABASE", "scoopy") %>
+    username: <%= ENV.fetch("PGUSER", "admin") %>
+    password: <%= ENV.fetch("PGPASSWORD", "") %>
+  cache:
+    <<: *default
+    database: <%= ENV.fetch("PGDATABASE", "scoopy") %>
+    username: <%= ENV.fetch("PGUSER", "admin") %>
+    password: <%= ENV.fetch("PGPASSWORD", "") %>
+  cable:
+    <<: *default
+    database: <%= ENV.fetch("PGDATABASE", "scoopy") %>
+    username: <%= ENV.fetch("PGUSER", "admin") %>
+    password: <%= ENV.fetch("PGPASSWORD", "") %>

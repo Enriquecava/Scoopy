@@ -20,6 +20,32 @@ type VerifyResponseItem = {
   product_name?: string
 }
 
+type VerificationBatchResponse = {
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  data?: VerifyResponseItem[]
+  error?: string | null
+}
+
+const VERIFICATION_POLL_INTERVAL_MS = 1000
+const VERIFICATION_MAX_POLLS = 180
+
+const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
+async function waitForVerification(batchId: number): Promise<VerificationBatchResponse> {
+  for (let attempt = 0; attempt < VERIFICATION_MAX_POLLS; attempt += 1) {
+    const response = await apiClient.get(`/products/verification_batches/${batchId}`)
+    const payload = response.data as VerificationBatchResponse
+
+    if (payload.status === 'completed' || payload.status === 'failed') {
+      return payload
+    }
+
+    await wait(VERIFICATION_POLL_INTERVAL_MS)
+  }
+
+  throw new Error('Verification timed out')
+}
+
 export function useProductScreenshotsStep({
   active,
   rows,
@@ -49,8 +75,15 @@ export function useProductScreenshotsStep({
         '/products/verify',
         rows.map((row) => ({ provider_id: row.providerId, ssn: row.ssn })),
       )
-      const payload = response.data
-      const data: VerifyResponseItem[] = Array.isArray(payload?.data) ? payload.data : []
+      const payload = await waitForVerification(response.data.id as number)
+
+      if (payload.status === 'failed') {
+        setError('products.addProduct.screenshotsVerifyError')
+        setItems([])
+        return
+      }
+
+      const data: VerifyResponseItem[] = Array.isArray(payload.data) ? payload.data : []
 
       setItems(
         data.map((entry) => ({
@@ -82,7 +115,9 @@ export function useProductScreenshotsStep({
         )
       } else {
         // Generic error
-        setError('products.addProduct.screenshotsVerifyError')
+        setError(errorResponse?.error === 'rate_limited'
+          ? 'products.addProduct.screenshotsRateLimited'
+          : 'products.addProduct.screenshotsVerifyError')
         setItems([])
       }
     } finally {
