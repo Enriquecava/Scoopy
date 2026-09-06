@@ -140,6 +140,16 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "/screenshots/example.png", response.parsed_body.dig("data", 0, "screenshot")
   end
 
+  test "should not mark an in-progress verification batch as all failed" do
+    batch = ProductVerificationBatch.create!(user: @user, status: :pending, total: 1)
+
+    get "/products/verification_batches/#{batch.id}", headers: @auth_headers, as: :json
+
+    assert_response :success
+    assert_equal "pending", response.parsed_body["status"]
+    assert_equal false, response.parsed_body.dig("meta", "all_failed")
+  end
+
   test "should not expose another user's verification batch" do
     other_user = User.create!(email: "other.products.user.#{SecureRandom.uuid}@example.com", password: "123456")
     batch = ProductVerificationBatch.create!(user: other_user, status: :pending, total: 1)

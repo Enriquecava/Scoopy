@@ -23,7 +23,7 @@ class ProductVerificationBatch < ApplicationRecord
         total: total,
         success: success_count,
         failed: failed_count,
-        all_failed: total.positive? && success_count.zero?
+        all_failed: completed? && total.positive? && failed_count == total
       },
       error: error
     }
