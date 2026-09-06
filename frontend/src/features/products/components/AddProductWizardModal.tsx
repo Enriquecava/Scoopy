@@ -10,6 +10,7 @@ import { ProvidersStep } from './ProvidersStep'
 import { ScreenshotsStep } from './ScreenshotsStep'
 import { StepDots } from './StepDots'
 import { useState } from 'react'
+import { getProductCreationErrorMessage } from '../utils/productCreationError'
 
 type AddProductWizardModalProps = {
   open: boolean
@@ -78,22 +79,7 @@ export function AddProductWizardModal({ open, onOpenChange, onProductCreated }: 
       // Notify parent to reload products
       onProductCreated?.()
     } catch (error: unknown) {
-      let errorMessage = 'Unknown error'
-      
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === 'object' && error !== null && 'response' in error) {
-        const response = (error as any).response
-        if (response?.data?.error) {
-          errorMessage = response.data.error
-        } else if (response?.data?.errors) {
-          errorMessage = Array.isArray(response.data.errors) 
-            ? response.data.errors[0]?.error || 'Failed to create product'
-            : 'Failed to create product'
-        }
-      }
-      
-      setSubmitError(errorMessage)
+      setSubmitError(getProductCreationErrorMessage(error, t))
     } finally {
       setIsSubmitting(false)
     }
