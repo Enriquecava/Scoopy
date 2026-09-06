@@ -4,14 +4,22 @@ export class SearchListPage {
   private page: Page;
   readonly priceSale :Locator;
   readonly priceRegular :Locator;
+  readonly item: Locator;
 
   constructor(page: Page) {
     this.page = page;
     this.priceSale = page.locator('[class="dfd-card-price dfd-card-price--sale"]')
-    this.priceRegular = page.locator('[class="dfd-card-price"]')
+    this.priceRegular = page.locator('[class="dfd-card-price"]');
+    this.item = page.locator('[class="dfd-card-live"]')
   }
 
-
+  async getItemImage(): Promise<Buffer> {
+    const image = await this.item.screenshot();
+    if (!image) {
+      throw new Error(`Image not found`);
+    }
+    return image;
+  }
   async priceItem(): Promise<string> {
     let price: string | null;
     if (await this.priceSale.count() > 0) {

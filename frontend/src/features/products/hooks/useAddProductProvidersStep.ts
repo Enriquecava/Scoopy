@@ -1,0 +1,99 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { apiClient } from '../../../shared/api/client'
+
+export type Provider = {
+  id: number
+  name: string
+}
+
+export type ProviderRow = {
+  id: string
+  providerId: number | null
+  ssn: string
+}
+
+function createEmptyRow(): ProviderRow {
+  return { id: crypto.randomUUID(), providerId: null, ssn: '' }
+}
+
+export function useAddProductProvidersStep({ active }: { active: boolean }) {
+  const [providers, setProviders] = useState<Provider[]>([])
+  const [providersLoading, setProvidersLoading] = useState(false)
+  const [providersError, setProvidersError] = useState<string | null>(null)
+  const [rows, setRows] = useState<ProviderRow[]>([createEmptyRow()])
+  const hasFetchedRef = useRef(false)
+
+  const loadProviders = useCallback(async () => {
+    setProvidersError(null)
+    setProvidersLoading(true)
+
+    try {
+      const response = await apiClient.get('/providers')
+      const payload = response.data
+      setProviders(Array.isArray(payload?.data) ? payload.data : [])
+    } catch (err) {
+      setProvidersError('products.addProduct.providersLoadError')
+    } finally {
+      setProvidersLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!active || hasFetchedRef.current) {
+      return
+    }
+
+    hasFetchedRef.current = true
+    void loadProviders()
+  }, [active, loadProviders])
+
+  const addRow = useCallback(() => {
+    setRows((current) => [...current, createEmptyRow()])
+  }, [])
+
+  const removeRow = useCallback((id: string) => {
+    setRows((current) => (current.length > 1 ? current.filter((row) => row.id !== id) : current))
+  }, [])
+
+  const updateRowProvider = useCallback((id: string, providerId: number) => {
+    setRows((current) => current.map((row) => (row.id === id ? { ...row, providerId } : row)))
+  }, [])
+
+  const updateRowSsn = useCallback((id: string, ssn: string) => {
+    setRows((current) => current.map((row) => (row.id === id ? { ...row, ssn } : row)))
+  }, [])
+
+  const availableProvidersForRow = useCallback(
+    (id: string) => {
+      const selectedElsewhere = new Set(
+        rows.filter((row) => row.id !== id && row.providerId !== null).map((row) => row.providerId),
+      )
+      return providers.filter((provider) => !selectedElsewhere.has(provider.id))
+    },
+    [providers, rows],
+  )
+
+  const isValid =
+    rows.length > 0 &&
+    rows.every((row) => row.providerId !== null && row.ssn.trim().length > 0) &&
+    new Set(rows.map((row) => row.providerId)).size === rows.length
+
+  const reset = useCallback(() => {
+    setRows([createEmptyRow()])
+  }, [])
+
+  return {
+    providers,
+    providersLoading,
+    providersError,
+    retryProviders: loadProviders,
+    rows,
+    addRow,
+    removeRow,
+    updateRowProvider,
+    updateRowSsn,
+    availableProvidersForRow,
+    isValid,
+    reset,
+  }
+}

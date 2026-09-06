@@ -11,54 +11,78 @@ function delay(ms: number): Promise<void> {
 }
 
 export async function processProductsFromDatabase(): Promise<void> {
-  const result = await getProducts();
-  const browser = await chromium.launch({ headless: headless,
-    args: [
-      '--disable-blink-features=AutomationControlled',
-      '--disable-extensions',
-    ],
-   });
+  const batchStartedAt = performance.now();
+  let totalProducts = 0;
+  let successfulProducts = 0;
+  let failedProducts = 0;
+
+  logger.info({ event: LOG_EVENT.BATCH_PROCESSING_STARTED }, 'Batch processing started');
 
   try {
-    for (const [index, { ssn, provider_id, product_id ,url}] of result.entries()) {
-      try {
-        const price = await scrapeAndStoreProductPrice(
-          browser,
-          ssn,
-          provider_id,
-          product_id,
-          url,
-        );
-        await upsertProductPrice({
-          provider_id,
-          product_id,
-          price,
-          currency: 'EUR',
-        });
-        logger.info({
-          event: LOG_EVENT.PRODUCT_PRICE_SAVED,
-          asin: ssn,
-          provider_id: Number(provider_id),
-          product_id,
-          price,
-          currency: 'EUR',
-        }, 'Product price saved');
-      } catch (error) {
-        logger.error({
-          event: LOG_EVENT.PRODUCT_PROCESSING_FAILED,
-          asin: ssn,
-          provider_id: Number(provider_id),
-          product_id,
-          error: normalizeLogError(error),
-        }, 'Error processing product');
-      }
+    const result = await getProducts();
+    totalProducts = result.length;
+    const browser = await chromium.launch({ headless: headless,
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-extensions',
+      ],
+     });
 
-      if (index < result.length - 1) {
-        await delay(BATCH_DELAY_MS);
+    try {
+      for (const [index, { ssn, provider_id, product_id ,url}] of result.entries()) {
+        const productStartedAt = performance.now();
+
+        try {
+          const price = await scrapeAndStoreProductPrice(
+            browser,
+            ssn,
+            provider_id,
+            product_id,
+            url,
+          );
+          await upsertProductPrice({
+            provider_id,
+            product_id,
+            price,
+            currency: 'EUR',
+          });
+          successfulProducts += 1;
+          logger.info({
+            event: LOG_EVENT.PRODUCT_PRICE_SAVED,
+            asin: ssn,
+            provider_id: Number(provider_id),
+            product_id,
+            price,
+            currency: 'EUR',
+            elapsed_ms: Math.round(performance.now() - productStartedAt),
+          }, 'Product price saved');
+        } catch (error) {
+          failedProducts += 1;
+          logger.error({
+            event: LOG_EVENT.PRODUCT_PROCESSING_FAILED,
+            asin: ssn,
+            provider_id: Number(provider_id),
+            product_id,
+            elapsed_ms: Math.round(performance.now() - productStartedAt),
+            error: normalizeLogError(error),
+          }, 'Error processing product');
+        }
+
+        if (index < result.length - 1) {
+          await delay(BATCH_DELAY_MS);
+        }
       }
+    } finally {
+      await browser.close();
     }
   } finally {
-    await browser.close();
+    logger.info({
+      event: LOG_EVENT.BATCH_PROCESSING_COMPLETED,
+      total_products: totalProducts,
+      successful_products: successfulProducts,
+      failed_products: failedProducts,
+      elapsed_ms: Math.round(performance.now() - batchStartedAt),
+    }, 'Batch processing completed');
   }
 }
 

@@ -8,6 +8,8 @@ export const LOG_EVENT = {
   PROVIDER_SCRAPE_FAILED: 'scraper.provider.failed',
   PRODUCT_PRICE_SAVED: 'scraper.product.price_saved',
   PRODUCT_PROCESSING_FAILED: 'scraper.product.processing_failed',
+  BATCH_PROCESSING_STARTED: 'scraper.batch.started',
+  BATCH_PROCESSING_COMPLETED: 'scraper.batch.completed',
   BATCH_PROCESSING_FAILED: 'scraper.batch.failed',
   INVALID_PRODUCT_INPUT: 'scraper.input.invalid_product',
   INVALID_CLI_INPUT: 'scraper.input.invalid_cli',
@@ -18,6 +20,15 @@ export const LOG_EVENT = {
   SCRAPER_INCIDENT_ALREADY_OPEN: 'scraper.incident.already_open',
   SCRAPER_INCIDENT_RESOLVED: 'scraper.incident.resolved',
   SCRAPER_INCIDENT_NO_OPEN: 'scraper.incident.no_open',
+} as const;
+
+export const VERIFIER_LOG_EVENT = {
+  VERIFICATION_STARTED: 'verifier.verification.started',
+  VERIFICATION_IMAGE_OBTAINED: 'verifier.verification.image_obtained',
+  VERIFICATION_FAILED: 'verifier.verification.failed',
+  FAILED_TO_GET_PROVIDER_URL: 'verifier.provider.failed_to_get_url',
+  INVALID_PRODUCT_INPUT: 'verifier.input.invalid_product',
+  UNSUPPORTED_PROVIDER: 'verifier.provider.unsupported',
 } as const;
 
 export function normalizeLogError(error: unknown): Record<string, unknown> {

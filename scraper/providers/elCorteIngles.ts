@@ -26,7 +26,5 @@ export const elCorteInglesScraper: ScraperFn = async ({context, productId,url })
   } catch (error) {
     logger.error({ event: LOG_EVENT.PROVIDER_SCRAPE_FAILED, provider: 'elCorteIngles', productId, error: normalizeLogError(error) }, 'El Corte Inglés scraper failed');
     throw error;
-  } finally {
-    await context.close();
   }
 };

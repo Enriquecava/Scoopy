@@ -8,6 +8,7 @@ This service provides:
 - Product CRUD
 - Product search by name
 - Product price history retrieval
+- Product scraper incidents retrieval
 
 ## Why Rails + Devise JWT
 
@@ -18,6 +19,7 @@ We use Rails to move quickly with strong conventions and PostgreSQL integration.
 - Ruby on Rails `~> 8.1.3`
 - PostgreSQL
 - Devise + devise-jwt
+- Solid Queue
 - Rack CORS
 
 ## Project Structure
@@ -37,6 +39,7 @@ scoopy-api/
       provider.rb
       providers_product.rb
       price_history.rb
+      scraper_incident.rb
       jwt_denylist.rb
     serializers/
       user_serializer.rb
@@ -84,11 +87,34 @@ If the database already exists:
 bundle exec rails db:migrate
 ```
 
-### Start the Server
+### Start the API and Solid Queue
+
+The API and Solid Queue must run as two processes. The API accepts verification requests, while Solid Queue processes the scraper jobs asynchronously. Keep both terminals running.
+
+From the `scoopy-api` directory, start the Rails API in the first terminal:
 
 ```bash
-bundle exec rails server
+RAILS_ENV=production bundle exec rails s
 ```
+
+Then start Solid Queue in a second terminal.
+
+On Linux:
+
+```bash
+RAILS_ENV=production bundle exec rails solid_queue:start
+```
+
+On macOS, use async supervisor mode to avoid Ruby `fork` crashes:
+
+```bash
+SOLID_QUEUE_SUPERVISOR_MODE=async \
+RAILS_ENV=production bundle exec rails solid_queue:start
+```
+
+Do not start only the Rails process. Without Solid Queue, verification requests return `202 Accepted` but remain pending because the scraper jobs are not processed.
+
+For container deployments, `bin/docker-entrypoint` runs `solid_queue:prepare` automatically after `db:prepare`, so the `solid_queue_*` tables are created before the server starts. The production Kamal configuration runs Solid Queue inside Puma with `SOLID_QUEUE_IN_PUMA=true`.
 
 Default URL: `http://localhost:3000`
 
@@ -201,6 +227,7 @@ Defined in `config/routes.rb`:
 - `PUT /products/:id`
 - `DELETE /products/:id`
 - `GET /products/:id/price_history`
+- `GET /products/:id/incidents`
 
 ## Product Endpoints
 
@@ -318,12 +345,31 @@ Returns product identity and sorted history (newest first):
 }
 ```
 
+### GET /products/:id/incidents
+
+Returns open scraper incidents for the product (newest first):
+
+```json
+[
+  {
+    "id": 1,
+    "product_id": "6557acf5-4087-4e67-afe5-6ec343ba4ad4",
+    "provider_id": 1,
+    "status": "open",
+    "created_at": "2026-08-08T10:00:00.000Z",
+    "updated_at": "2026-08-08T10:00:00.000Z",
+    "provider_name": "Provider A"
+  }
+]
+```
+
 ## Data Model Summary
 
 - `Product` has many `providers_products` and `price_histories`.
 - `Provider` has many `providers_products`.
 - `ProvidersProduct` belongs to `product` and `provider`.
-- `PriceHistory` belongs to `product` and `provider` (foreign key `providers_id`).
+- `PriceHistory` belongs to `product` and `provider` (foreign key `provider_id`).
+- `ScraperIncident` belongs to `product` and `provider`; tracks scraper health per pair with `status` (`open`/`resolved`).
 - `User` authenticates with Devise JWT and uses `JwtDenylist` for revocation.
 
 ## Example Authenticated Requests

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_12_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_05_000008) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -25,10 +25,45 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_12_000003) do
     t.string "currency", limit: 3, null: false
     t.decimal "price", null: false
     t.uuid "product_id", null: false
-    t.bigint "providers_id", null: false
+    t.bigint "provider_id", null: false
     t.datetime "updated_at", null: false
     t.index ["product_id"], name: "index_price_histories_on_product_id"
-    t.index ["providers_id"], name: "index_price_histories_on_providers_id"
+    t.index ["provider_id"], name: "index_price_histories_on_provider_id"
+  end
+
+  create_table "product_verification_batches", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "error"
+    t.integer "failed_count", default: 0, null: false
+    t.datetime "finished_at"
+    t.datetime "started_at"
+    t.string "status", default: "pending", null: false
+    t.integer "success_count", default: 0, null: false
+    t.integer "total", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["user_id", "created_at"], name: "index_product_verification_batches_on_user_id_and_created_at"
+    t.index ["user_id"], name: "index_product_verification_batches_on_user_id"
+    t.index ["user_id"], name: "index_verification_batches_on_active_user", unique: true, where: "((status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying])::text[]))"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'processing'::character varying, 'completed'::character varying, 'failed'::character varying]::text[])", name: "product_verification_batches_status_check"
+  end
+
+  create_table "product_verification_items", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "finished_at"
+    t.integer "position", null: false
+    t.string "product_name"
+    t.bigint "product_verification_batch_id", null: false
+    t.string "provider_id"
+    t.string "screenshot"
+    t.string "ssn"
+    t.datetime "started_at"
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.string "verification_error"
+    t.index ["product_verification_batch_id", "position"], name: "index_verification_items_on_batch_and_position", unique: true
+    t.index ["product_verification_batch_id"], name: "idx_on_product_verification_batch_id_aa84ad99cf"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'processing'::character varying, 'completed'::character varying, 'failed'::character varying]::text[])", name: "product_verification_items_status_check"
   end
 
   create_table "products", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -50,7 +85,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_12_000003) do
     t.bigint "provider_id", null: false
     t.string "ssn", null: false
     t.datetime "updated_at", null: false
+    t.index ["product_id", "provider_id"], name: "index_providers_products_on_product_id_and_provider_id", unique: true
     t.index ["product_id"], name: "index_providers_products_on_product_id"
+    t.index ["provider_id", "ssn"], name: "index_providers_products_on_provider_id_and_ssn", unique: true
     t.index ["provider_id"], name: "index_providers_products_on_provider_id"
   end
 
@@ -73,13 +110,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_12_000003) do
     t.datetime "remember_created_at"
     t.datetime "reset_password_sent_at"
     t.string "reset_password_token"
+    t.string "role", default: "user", null: false
     t.datetime "updated_at", null: false
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
+    t.check_constraint "role::text = ANY (ARRAY['user'::character varying, 'admin'::character varying]::text[])", name: "users_role_check"
   end
 
   add_foreign_key "price_histories", "products"
-  add_foreign_key "price_histories", "providers", column: "providers_id"
+  add_foreign_key "price_histories", "providers"
+  add_foreign_key "product_verification_batches", "users"
+  add_foreign_key "product_verification_items", "product_verification_batches"
   add_foreign_key "providers_products", "products"
   add_foreign_key "providers_products", "providers"
   add_foreign_key "scraper_incidents", "products"

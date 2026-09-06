@@ -1,11 +1,27 @@
 require "test_helper"
 
 class ProductsControllerTest < ActionDispatch::IntegrationTest
+  module ConcurrentSaveFailure
+    def save!(...)
+      if Thread.current[:simulate_providers_product_save_conflict]
+        raise ActiveRecord::RecordNotUnique
+      end
+
+      super
+    end
+  end
+
+  ProvidersProduct.prepend(ConcurrentSaveFailure) unless ProvidersProduct.ancestors.include?(ConcurrentSaveFailure)
+
   setup do
     @product = products(:one)
-    @user = User.create!(email: "products.user@example.com", password: "123456")
+    @user = User.create!(email: "products.user.#{SecureRandom.uuid}@example.com", password: "123456")
+    @admin = User.create!(email: "products.admin.#{SecureRandom.uuid}@example.com", password: "123456", role: :admin)
     @auth_headers = {
       "Authorization" => "Bearer #{sign_in(@user)}"
+    }
+    @admin_auth_headers = {
+      "Authorization" => "Bearer #{sign_in(@admin)}"
     }
   end
 
@@ -14,10 +30,10 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
     response.parsed_body.fetch("token")
   end
 
-  test "should get index with providers and providers_products nested" do
+  test "should get index with products" do
     product = Product.create!(name: "Example product")
     provider = Provider.create!(name: "Example provider", url: "https://example.com")
-    provider_product = product.providers_products.create!(provider: provider, ssn: "12345")
+    product.providers_products.create!(provider: provider, ssn: "12345")
 
     get products_url, headers: @auth_headers, as: :json
 
@@ -27,16 +43,14 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
 
     product_payload = body.find { |item| item["id"] == product.id }
     assert_not_nil product_payload
-    assert_equal ["Example provider"], product_payload.fetch("providers").map { |provider_payload| provider_payload["name"] }
-    assert_equal [provider_product.ssn], product_payload.fetch("providers_products").map { |provider_payload| provider_payload["ssn"] }
-    assert_equal ["Example provider"], product_payload.fetch("providers_products").map { |provider_payload| provider_payload["provider_name"] }
+    assert_equal product.name, product_payload.fetch("name")
   end
 
   test "should filter products by partial name match" do
     matching_product = Product.create!(name: "Gel asd limpiador")
     Product.create!(name: "Crema hidratante")
 
-    get products_url, params: { filter: "asd" }, headers: @auth_headers, as: :json
+    get products_url, params: { filter: "asd" }, headers: @auth_headers
 
     assert_response :success
     product_names = response.parsed_body.map { |product_payload| product_payload["name"] }
@@ -47,7 +61,7 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
   test "should filter products case insensitively" do
     matching_product = Product.create!(name: "Suero AsD facial")
 
-    get products_url, params: { filter: "asd" }, headers: @auth_headers, as: :json
+    get products_url, params: { filter: "asd" }, headers: @auth_headers
 
     assert_response :success
     product_names = response.parsed_body.map { |product_payload| product_payload["name"] }
@@ -55,18 +69,153 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should return error for unsupported query params" do
-    get products_url, params: { filters: "Lucas" }, headers: @auth_headers, as: :json
+    get products_url, params: { filters: "Lucas" }, headers: @auth_headers
 
     assert_response :bad_request
-    assert_equal "unsoported parameter", response.parsed_body["error"]
+    assert_equal "unsupported parameter", response.parsed_body["error"]
+  end
+
+  test "should reject invalid JSON payloads for verification" do
+    post verify_products_url, params: "{not json", headers: @auth_headers.merge("CONTENT_TYPE" => "application/json")
+
+    assert_response :bad_request
+    assert_equal "Invalid JSON payload", response.parsed_body["error"]
+  end
+
+  test "should reject verification batches larger than the allowed limit" do
+    items = Array.new(6) { { provider_id: 1, ssn: "ABC123" } }
+
+    post verify_products_url, params: items.to_json, headers: @auth_headers.merge("CONTENT_TYPE" => "application/json")
+
+    assert_response :bad_request
+    assert_equal "Request must include between 1 and 5 items", response.parsed_body["error"]
+  end
+
+  test "should enqueue verification and return an accepted batch" do
+    assert_enqueued_with(job: ProductVerificationItemJob) do
+      post verify_products_url, params: [{ provider_id: 1, ssn: "ABC123" }].to_json, headers: @auth_headers.merge("CONTENT_TYPE" => "application/json")
+    end
+
+    assert_response :accepted
+    assert_equal "pending", response.parsed_body["status"]
+    assert_equal 1, ProductVerificationBatch.last.items.count
+  end
+
+  test "should rate limit recent verification requests" do
+    5.times do
+      ProductVerificationBatch.create!(user: @user, status: :completed, total: 1, success_count: 1)
+    end
+
+    post verify_products_url, params: [{ provider_id: 1, ssn: "ABC123" }].to_json, headers: @auth_headers.merge("CONTENT_TYPE" => "application/json")
+
+    assert_response :too_many_requests
+    assert_equal "rate_limited", response.parsed_body["error"]
+  end
+
+  test "should return service unavailable when verification cannot be queued" do
+    original_perform_later = ProductVerificationItemJob.method(:perform_later)
+    ProductVerificationItemJob.singleton_class.define_method(:perform_later) do |_item_id|
+      raise ActiveJob::EnqueueError, "queue unavailable"
+    end
+
+    begin
+      post verify_products_url, params: [{ provider_id: 1, ssn: "ABC123" }].to_json, headers: @auth_headers.merge("CONTENT_TYPE" => "application/json")
+    ensure
+      ProductVerificationItemJob.singleton_class.define_method(:perform_later, original_perform_later)
+    end
+
+    assert_response :service_unavailable
+    assert_equal "verification_unavailable", response.parsed_body["error"]
+    assert ProductVerificationBatch.last.failed?
+  end
+
+  test "should return the verification batch status to its owner" do
+    batch = ProductVerificationBatch.create!(user: @user, status: :completed, total: 1, success_count: 1)
+    batch.items.create!(position: 0, provider_id: "1", ssn: "ABC123", status: :completed, screenshot: "/screenshots/example.png")
+
+    get "/products/verification_batches/#{batch.id}", headers: @auth_headers, as: :json
+
+    assert_response :success
+    assert_equal "completed", response.parsed_body["status"]
+    assert_equal "/screenshots/example.png", response.parsed_body.dig("data", 0, "screenshot")
+  end
+
+  test "should not mark an in-progress verification batch as all failed" do
+    batch = ProductVerificationBatch.create!(user: @user, status: :pending, total: 1)
+
+    get "/products/verification_batches/#{batch.id}", headers: @auth_headers, as: :json
+
+    assert_response :success
+    assert_equal "pending", response.parsed_body["status"]
+    assert_equal false, response.parsed_body.dig("meta", "all_failed")
+  end
+
+  test "should not expose another user's verification batch" do
+    other_user = User.create!(email: "other.products.user.#{SecureRandom.uuid}@example.com", password: "123456")
+    batch = ProductVerificationBatch.create!(user: other_user, status: :pending, total: 1)
+
+    get "/products/verification_batches/#{batch.id}", headers: @auth_headers, as: :json
+
+    assert_response :not_found
+  end
+
+  test "should reject invalid screenshot filenames with 404" do
+    get "/screenshots/not-valid.png", headers: @auth_headers, as: :json
+
+    assert_response :not_found
+  end
+
+  test "should require authentication to access screenshots" do
+    get "/screenshots/#{SecureRandom.uuid}.png", as: :json
+
+    assert_response :unauthorized
   end
 
   test "should create product" do
+    provider = Provider.create!(name: "New provider", url: "https://new.example.com")
+
     assert_difference("Product.count") do
-      post products_url, params: { product: { name: @product.name } }, headers: @auth_headers, as: :json
+      post products_url, params: {
+        name: "New product #{SecureRandom.uuid}",
+        provider_products: [{ provider_id: provider.id, ssn: "NEW-SSN" }]
+      }, headers: @auth_headers, as: :json
     end
 
     assert_response :created
+  end
+
+  test "should reject creating a duplicate provider and SSN pair" do
+    provider = Provider.create!(name: "Duplicate provider", url: "https://duplicate.example.com")
+    existing_product = Product.create!(name: "Existing product")
+    existing_product.providers_products.create!(provider: provider, ssn: "DUPLICATE-SSN")
+
+    assert_no_difference("Product.count") do
+      post products_url, params: {
+        name: "Duplicate product",
+        provider_products: [{ provider_id: provider.id, ssn: "DUPLICATE-SSN" }]
+      }, headers: @auth_headers, as: :json
+    end
+
+    assert_response :bad_request
+    assert_equal "duplicate_ssn", response.parsed_body.dig("errors", 0, "error")
+    assert_equal existing_product.id, response.parsed_body.dig("errors", 0, "existing_product_id")
+  end
+
+  test "should translate a concurrent provider and SSN conflict" do
+    provider = Provider.create!(name: "Concurrent provider", url: "https://concurrent.example.com")
+    existing_product = Product.create!(name: "Concurrent existing product")
+    existing_product.providers_products.create!(provider: provider, ssn: "CONCURRENT-SSN")
+    Thread.current[:simulate_providers_product_save_conflict] = true
+
+    post products_url, params: {
+      name: "Concurrent product",
+      provider_products: [{ provider_id: provider.id, ssn: "CONCURRENT-SSN" }]
+    }, headers: @auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "duplicate_ssn", response.parsed_body.dig("errors", 0, "error")
+  ensure
+    Thread.current[:simulate_providers_product_save_conflict] = false
   end
 
   test "should show product with providers_products" do
@@ -82,15 +231,156 @@ class ProductsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should update product" do
-    patch product_url(@product), params: { product: { name: @product.name } }, headers: @auth_headers, as: :json
+    patch product_url(@product), params: { product: { name: "Updated product" } }, headers: @admin_auth_headers, as: :json
     assert_response :success
+  end
+
+  test "should update an existing provider product" do
+    provider = Provider.create!(name: "Update provider", url: "https://update.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "12345")
+
+    assert_no_difference("ProvidersProduct.count") do
+      patch product_url(@product), params: {
+        product: {
+          providers_products_attributes: [{ provider_id: provider.id, ssn: " UPDATED-SSN " }]
+        }
+      }, headers: @admin_auth_headers, as: :json
+    end
+
+    assert_response :success
+    assert_equal "UPDATED-SSN", providers_product.reload.ssn
+  end
+
+  test "should reject updating to a provider and SSN pair used by another product" do
+    provider = Provider.create!(name: "Duplicate update provider", url: "https://duplicate-update.example.com")
+    other_product = Product.create!(name: "Other product")
+    other_product.providers_products.create!(provider: provider, ssn: "TAKEN-SSN")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "AVAILABLE-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id, ssn: "TAKEN-SSN" }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "duplicate_ssn", response.parsed_body.dig("errors", 0, "error")
+    assert_equal "AVAILABLE-SSN", providers_product.reload.ssn
+  end
+
+  test "should normalize SSN before checking duplicate provider pairs on update" do
+    provider = Provider.create!(name: "Normalized update provider", url: "https://normalized-update.example.com")
+    other_product = Product.create!(name: "Normalized other product")
+    other_product.providers_products.create!(provider: provider, ssn: "TAKEN-SSN")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "AVAILABLE-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id, ssn: " TAKEN-SSN " }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "duplicate_ssn", response.parsed_body.dig("errors", 0, "error")
+    assert_equal "AVAILABLE-SSN", providers_product.reload.ssn
+  end
+
+  test "should preserve SSN when it is omitted from an update" do
+    provider = Provider.create!(name: "Omitted SSN provider", url: "https://omitted-ssn.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "UNCHANGED-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :success
+    assert_equal "UNCHANGED-SSN", providers_product.reload.ssn
+  end
+
+  test "should reject a blank SSN on update without clearing the existing value" do
+    provider = Provider.create!(name: "Blank SSN provider", url: "https://blank-ssn.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "UNCHANGED-SSN")
+
+    patch product_url(@product), params: {
+      product: {
+        providers_products_attributes: [{ provider_id: provider.id, ssn: "   " }]
+      }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :bad_request
+    assert_equal "ssn cannot be blank", response.parsed_body["error"]
+    assert_equal "UNCHANGED-SSN", providers_product.reload.ssn
+  end
+
+  test "should destroy an existing provider product when _destroy is true" do
+    provider = Provider.create!(name: "Delete provider", url: "https://delete.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "12345")
+
+    assert_difference("ProvidersProduct.count", -1) do
+      patch product_url(@product), params: {
+        product: {
+          providers_products_attributes: [{ provider_id: provider.id, _destroy: "true" }]
+        }
+      }, headers: @admin_auth_headers, as: :json
+    end
+
+    assert_response :success
+    assert_not ProvidersProduct.exists?(product_id: @product.id, provider_id: provider.id)
+  end
+
+  test "should not destroy a provider product when _destroy is false" do
+    provider = Provider.create!(name: "Keep provider", url: "https://keep.example.com")
+    providers_product = @product.providers_products.create!(provider: provider, ssn: "12345")
+
+    assert_no_difference("ProvidersProduct.count") do
+      patch product_url(@product), params: {
+        product: {
+          providers_products_attributes: [{ provider_id: provider.id, _destroy: "false", ssn: "UPDATED-SSN" }]
+        }
+      }, headers: @admin_auth_headers, as: :json
+    end
+
+    assert_response :success
+    assert_equal "UPDATED-SSN", providers_product.reload.ssn
+  end
+
+  test "should return not found when updating a missing provider product" do
+    patch product_url(@product), params: {
+      product: { providers_products_attributes: [{ provider_id: -1, ssn: "UPDATED-SSN" }] }
+    }, headers: @admin_auth_headers, as: :json
+
+    assert_response :not_found
+  end
+
+  test "should forbid a regular user from updating a product" do
+    patch product_url(@product), params: { product: { name: "Updated product" } }, headers: @auth_headers, as: :json
+    assert_response :forbidden
   end
 
   test "should destroy product" do
     assert_difference("Product.count", -1) do
-      delete product_url(@product), headers: @auth_headers, as: :json
+      delete product_url(@product), headers: @admin_auth_headers, as: :json
     end
 
     assert_response :no_content
+  end
+
+  test "should forbid a regular user from destroying a product" do
+    delete product_url(@product), headers: @auth_headers, as: :json
+    assert_response :forbidden
+  end
+
+  test "should reject duplicate provider_ids in the same verification batch" do
+    items = [
+      { provider_id: 1, ssn: "ABC123" },
+      { provider_id: 1, ssn: "XYZ456" }
+    ]
+
+    post verify_products_url, params: items.to_json, headers: @auth_headers.merge("CONTENT_TYPE" => "application/json")
+
+    assert_response :bad_request
+    assert_equal "Duplicate provider_id values are not allowed", response.parsed_body["error"]
   end
 end

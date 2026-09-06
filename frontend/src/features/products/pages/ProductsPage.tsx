@@ -4,6 +4,7 @@ import { LoaderCircle, PackageOpen, Search, Sparkles } from 'lucide-react'
 import { apiClient } from '../../../shared/api/client'
 import { useAuth } from '../../../app/providers/AuthProvider'
 import { useTranslation } from '../../../shared/i18n'
+import { AddProductButton } from '../components/AddProductButton'
 
 type Product = {
   id: string | number
@@ -37,45 +38,45 @@ export function ProductsPage() {
     }
   }, [searchTerm])
 
+  const loadProducts = async () => {
+    setError(null)
+    setLoading(true)
+
+    try {
+      const response = await apiClient.get('/products')
+      const payload = response.data
+      const normalizedProducts = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.products)
+          ? payload.products
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : []
+
+      const cleanedProducts = normalizedProducts.filter((item: unknown): item is Product => {
+        if (!item || typeof item !== 'object') {
+          return false
+        }
+
+        const candidate = item as Partial<Product>
+        return (typeof candidate.id === 'string' || typeof candidate.id === 'number') && typeof candidate.name === 'string'
+      })
+
+      setProducts(cleanedProducts)
+    } catch (err) {
+      setError('products.search.loadError')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login', { replace: true })
       return
     }
 
-    const loadInitialProducts = async () => {
-      setError(null)
-      setLoading(true)
-
-      try {
-        const response = await apiClient.get('/products')
-        const payload = response.data
-        const normalizedProducts = Array.isArray(payload)
-          ? payload
-          : Array.isArray(payload?.products)
-            ? payload.products
-            : Array.isArray(payload?.data)
-              ? payload.data
-              : []
-
-        const cleanedProducts = normalizedProducts.filter((item: unknown): item is Product => {
-          if (!item || typeof item !== 'object') {
-            return false
-          }
-
-          const candidate = item as Partial<Product>
-          return (typeof candidate.id === 'string' || typeof candidate.id === 'number') && typeof candidate.name === 'string'
-        })
-
-        setProducts(cleanedProducts)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'No se pudieron cargar los productos.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void loadInitialProducts()
+    void loadProducts()
   }, [isAuthenticated, navigate])
 
   useEffect(() => {
@@ -119,7 +120,7 @@ export function ProductsPage() {
         setSearchResults(cleanedProducts)
       } catch (err) {
         setSearchResults([])
-        setSearchError(err instanceof Error ? err.message : 'No se pudieron buscar productos.')
+        setSearchError('products.search.error')
       } finally {
         setSearchLoading(false)
       }
@@ -135,7 +136,10 @@ export function ProductsPage() {
       <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-lg shadow-slate-950/30 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.35em] text-cyan-400">{t('products.sectionTitle')}</p>
-          <h2 className="mt-2 text-2xl font-semibold">{t('products.title')}</h2>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h2 className="text-2xl font-semibold">{t('products.title')}</h2>
+            <AddProductButton onProductCreated={loadProducts} />
+          </div>
           <p className="mt-2 text-sm text-slate-400">{t('products.subtitle')}</p>
         </div>
 
@@ -164,7 +168,7 @@ export function ProductsPage() {
                   <span>{t('products.search.loading')}</span>
                 </div>
               ) : searchError ? (
-                <p className="px-3 py-2 text-sm text-rose-300">{searchError}</p>
+                <p className="px-3 py-2 text-sm text-rose-300">{t(searchError)}</p>
               ) : searchResults.length > 0 ? (
                 <ul className="max-h-72 overflow-auto py-1">
                   {searchResults.map((product) => (
@@ -196,7 +200,7 @@ export function ProductsPage() {
         <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-10 text-center text-slate-300">{t('common.loading')}</div>
       ) : null}
 
-      {error ? <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">{error}</div> : null}
+      {error ? <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">{t(error)}</div> : null}
 
       {!loading && !error ? (
         products.length > 0 ? (

@@ -1,15 +1,25 @@
 Rails.application.routes.draw do
   devise_for :users,
+           skip: [:registrations],
            defaults: { format: :json },
            controllers: {
-             sessions: "users/sessions",
-             registrations: "users/registrations"
+             sessions: "users/sessions"
            }
-  resources :products, defaults: { format: :json }  do
+  resources :users, only: :create, defaults: { format: :json }
+  get "screenshots/:filename", to: "products#screenshot", as: :product_screenshot
+
+  resources :products, defaults: { format: :json } do
+    collection do
+      post :verify
+      get "verification_batches/:id", action: :verification_batch, as: :verification_batch
+    end
+
     member do
       get :price_history
+      get :incidents
     end
   end
+  resources :providers, only: :index, defaults: { format: :json }
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.

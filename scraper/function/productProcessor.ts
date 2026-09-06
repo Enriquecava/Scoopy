@@ -38,27 +38,32 @@ export async function scrapeAndStoreProductPrice(
     logger.error({ event: LOG_EVENT.UNSUPPORTED_PROVIDER, provider_id, asin }, 'Unsupported provider requested');
     throw new Error(`Unsupported provider_id: ${provider_id}`);
   }
-  const context = await browser.newContext({
+  
+  const contextConfig = {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
     extraHTTPHeaders: {
       'Accept-Language': 'es-ES,es;q=0.9',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     }
-  });
-  await context.addInitScript(()=>{
-    Object.defineProperty(navigator, 'webdriver', {
-      get: () => false,
-    })
-  })
+  };
 
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= MAX_SCRAPER_RETRIES; attempt += 1) {
+    const context = await browser.newContext(contextConfig);
+
     try {
+      await context.addInitScript(()=>{
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => false,
+        })
+      })
       const price = await scraper({ context: context, productId: asin, url: url });
+      await context.close();
       await closeScraperIncident({ provider_id, product_id, asin });
       return price;
     } catch (error) {
+      await context.close();
       lastError = error;
       logger.warn({
         event: LOG_EVENT.PROVIDER_SCRAPE_FAILED,

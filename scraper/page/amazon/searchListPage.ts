@@ -12,6 +12,10 @@ export class SearchListPage {
   async clickItem(asin: string) {
     await this.item(asin).click();
   }
+  async getItemImage(asin: string): Promise<Buffer> {
+    await this.item(asin).first().waitFor();
+    return await this.item(asin).first().screenshot();
+  }
 
   async priceItem(asin: string): Promise<string> {
     const itemLocator = this.item(asin).first();

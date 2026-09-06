@@ -26,7 +26,5 @@ export const primorScraper: ScraperFn = async ({context,productId,url }) => {
   } catch (error) {
     logger.error({ event: LOG_EVENT.PROVIDER_SCRAPE_FAILED, provider: 'primor', productId, error: normalizeLogError(error) }, 'Primor scraper failed');
     throw error;
-  } finally {
-    await context.close();
   }
 };
