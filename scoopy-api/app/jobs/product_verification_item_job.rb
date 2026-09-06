@@ -5,11 +5,21 @@ class ProductVerificationItemJob < ApplicationJob
   def perform(item_id)
     started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     item = ProductVerificationItem.find(item_id)
-    return if item.product_verification_batch.failed?
-    return unless item.pending?
+    batch = nil
+    claimed = false
 
-    item.update!(status: :processing, started_at: Time.current)
-    item.product_verification_batch.update!(status: :processing, started_at: Time.current)
+    batch = item.product_verification_batch
+    batch.with_lock do
+      item.with_lock do
+        next if batch.failed? || !item.pending?
+
+        item.update!(status: :processing, started_at: Time.current)
+        batch.update!(status: :processing, started_at: batch.started_at || Time.current)
+        claimed = true
+      end
+    end
+
+    return unless claimed
 
     result = ProductVerificationService.verify_item(
       "provider_id" => item.provider_id,
@@ -33,7 +43,7 @@ class ProductVerificationItemJob < ApplicationJob
     )
     Rails.logger.error("Product verification job failed for item=#{item_id}: #{e.class}: #{e.message}")
   ensure
-    ProductVerificationBatchStatusService.call(item&.product_verification_batch)
+    ProductVerificationBatchStatusService.call(batch || item&.product_verification_batch)
     ActiveSupport::Notifications.instrument(
       "product_verification.item",
       item_id: item_id,
