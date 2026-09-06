@@ -114,6 +114,8 @@ RAILS_ENV=production bundle exec rails solid_queue:start
 
 Do not start only the Rails process. Without Solid Queue, verification requests return `202 Accepted` but remain pending because the scraper jobs are not processed.
 
+For container deployments, `bin/docker-entrypoint` runs `solid_queue:prepare` automatically after `db:prepare`, so the `solid_queue_*` tables are created before the server starts. The production Kamal configuration runs Solid Queue inside Puma with `SOLID_QUEUE_IN_PUMA=true`.
+
 Default URL: `http://localhost:3000`
 
 ## Environment and Configuration

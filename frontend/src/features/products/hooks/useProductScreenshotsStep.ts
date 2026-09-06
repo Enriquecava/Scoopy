@@ -31,9 +31,19 @@ const VERIFICATION_MAX_POLLS = 180
 
 function wait(milliseconds: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
-    const timeoutId = window.setTimeout(resolve, milliseconds)
+    let timeoutId: number | undefined
+    const cleanup = () => {
+      signal.removeEventListener('abort', abort)
+    }
+    const resolveTimeout = () => {
+      cleanup()
+      resolve()
+    }
     const abort = () => {
-      window.clearTimeout(timeoutId)
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId)
+      }
+      cleanup()
       reject(new DOMException('Verification polling was cancelled', 'AbortError'))
     }
 
@@ -43,6 +53,7 @@ function wait(milliseconds: number, signal: AbortSignal) {
     }
 
     signal.addEventListener('abort', abort, { once: true })
+    timeoutId = window.setTimeout(resolveTimeout, milliseconds)
   })
 }
 

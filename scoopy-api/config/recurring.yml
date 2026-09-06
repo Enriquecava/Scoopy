@@ -18,3 +18,8 @@ production:
     class: CleanupTemporaryScreenshotsJob
     queue: default
     schedule: every hour
+
+  cleanup_stale_product_verification_batches:
+    class: CleanupStaleProductVerificationBatchesJob
+    queue: default
+    schedule: every 5 minutes
