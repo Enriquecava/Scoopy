@@ -16,6 +16,16 @@ export class SearchListPage {
     await this.item(asin).first().waitFor();
     return await this.item(asin).first().screenshot();
   }
+  async isItemAvailable(asin: string): Promise<boolean> {
+    const itemLocator = this.item(asin).first();
+    await itemLocator.waitFor();
+    return await itemLocator.isVisible();
+  }
+  async isPriceAvailable(asin: string): Promise<boolean> {
+    const itemLocator = this.item(asin).first();
+    const priceLocator = itemLocator.locator('span[data-a-size="xl"][data-a-color="base"].a-price');
+    return await priceLocator.isVisible();
+  }
 
   async priceItem(asin: string): Promise<string> {
     const itemLocator = this.item(asin).first();

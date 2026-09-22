@@ -19,6 +19,22 @@ export const amazonScraper: ScraperFn = async ({context,productId,url }) => {
 
     await cookiesPage.clickAcceptButton();
     await homePage.searchForAsin(productId);
+    try{
+      const isAvailable = await searchListPage.isItemAvailable(productId);
+      if (!isAvailable) {
+        throw new Error(`Item with ASIN: ${productId} is not available`);
+      }
+    } catch (error) {
+      throw error;
+    }
+    try {
+      const isPriceAvailable = await searchListPage.isPriceAvailable(productId);
+      if (!isPriceAvailable) {
+        throw new Error(`Price for item with ASIN: ${productId} is not available`);
+      }
+    } catch (error) {
+      throw error;
+    }
 
     const rawPrice = await searchListPage.priceItem(productId);
     const price = parsePriceToEuros(rawPrice);

@@ -20,13 +20,27 @@ export const amazonVerifier: VerifierFn = async ({ context, productId, url }) =>
 
     await cookiesPage.clickAcceptButton();
     await homePage.searchForAsin(productId);
+    try{
+      const isAvailable = await searchListPage.isItemAvailable(productId);
+      if (!isAvailable) {
+        throw new Error(`Item with ASIN: ${productId} is not available`);
+      }
+    } catch (error) {
+      throw error;
+    }
+    try {
+      const isPriceAvailable = await searchListPage.isPriceAvailable(productId);
+      if (!isPriceAvailable) {
+        throw new Error(`Price for item with ASIN: ${productId} is not available`);
+      }
+    } catch (error) {
+      throw error;
+    }
     const image = await searchListPage.getItemImage(productId);
     logger.info(
       { event: VERIFIER_LOG_EVENT.VERIFICATION_IMAGE_OBTAINED, provider: 'amazon', productId },
       'Amazon product image obtained',
     );
-    //const base64 = image.toString('base64');
-    //const dataUri = `data:image/png;base64,${base64}`;
     return image;
   } catch (error) {
     logger.error(
