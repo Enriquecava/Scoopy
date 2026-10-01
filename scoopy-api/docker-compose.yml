@@ -1,0 +1,38 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: scoopy-api
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      RAILS_ENV: production
+      RAILS_MASTER_KEY: ${RAILS_MASTER_KEY}
+      PORT: ${API_PORT:-3000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+    networks:
+      - tunnel
+    # Uncomment to reach the API directly from the host while testing without the tunnel.
+    # ports:
+    #   - "${API_PORT:-3000}:3000"
+
+  scraper:
+    build:
+      context: ../scraper
+      dockerfile: Dockerfile
+    image: scoopy-scraper
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      SCRAPER_BATCH_INTERVAL_SECONDS: ${SCRAPER_BATCH_INTERVAL_SECONDS:-3600}
+
+networks:
+  # External network created by the docker-compose project that already runs
+  # the Cloudflare tunnel (cloudflared). Set TUNNEL_NETWORK_NAME in .env to
+  # match that network's name so cloudflared can route traffic to "api".
+  tunnel:
+    name: ${TUNNEL_NETWORK_NAME:-tunnel_net}
+    external: true
