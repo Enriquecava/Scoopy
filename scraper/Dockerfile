@@ -9,8 +9,12 @@ ARG NODE_MAJOR
 WORKDIR /app
 
 # package.json requires Node >=26.5; the Playwright image's bundled Node may be older.
+# Remove it from /usr/local first: that path wins over NodeSource's /usr/bin install
+# on Debian's default PATH, so leaving it would silently keep the old Node active.
 RUN apt-get update -qq && \
     apt-get install --no-install-recommends -y ca-certificates curl gnupg && \
+    rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack && \
+    rm -rf /usr/local/lib/node_modules /usr/local/include/node && \
     curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - && \
     apt-get install --no-install-recommends -y nodejs && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
@@ -27,10 +31,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # verifier.ts launches Chromium headed (headless: false) for anti-bot evasion,
-# so it needs a virtual display to run inside a container. Also replaces the
-# image's bundled Node with the version package.json's engines.node requires.
+# so it needs a virtual display to run inside a container (xvfb-run requires xauth).
+# Also replaces the image's bundled Node (see build stage comment above for why
+# /usr/local's copy must be removed first) with the version engines.node requires.
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y xvfb ca-certificates curl gnupg && \
+    apt-get install --no-install-recommends -y xvfb xauth ca-certificates curl gnupg && \
+    rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack && \
+    rm -rf /usr/local/lib/node_modules /usr/local/include/node && \
     curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - && \
     apt-get install --no-install-recommends -y nodejs && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
