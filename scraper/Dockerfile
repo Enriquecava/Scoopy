@@ -17,8 +17,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
-# @playwright/test is a devDependency but is required at runtime by the batch processor.
-RUN npm ci
+# NODE_ENV=production makes npm skip devDependencies by default; @playwright/test
+# is a devDependency but is required at runtime by the batch processor.
+RUN npm ci --include=dev
 
 COPY --from=build /app/dist ./dist
 COPY docker/run-batch.sh ./docker/run-batch.sh
