@@ -10,12 +10,23 @@ services:
     environment:
       RAILS_ENV: production
       SOLID_QUEUE_IN_PUMA: "true"
-      RAILS_MASTER_KEY: ${RAILS_MASTER_KEY}
+      # RAILS_MASTER_KEY comes from env_file (../.env), not interpolated here:
+      # a bare ${VAR} with no default resolves to "" when this compose is
+      # included/run from an external project, silently overriding env_file.
       # Fixed: must match the port Puma actually listens on inside the container.
       PORT: 3000
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+      # "verifier" is the service name below; resolved via the shared "internal" network.
+      SCRAPER_VERIFIER_URL: ${SCRAPER_VERIFIER_URL:-http://verifier:4000/verify}
+      SCREENSHOT_DIRECTORY: /rails/tmp/screenshot
+    volumes:
+      - screenshots:/rails/tmp/screenshot
+    depends_on:
+      verifier:
+        condition: service_healthy
     networks:
       - tunnel
+      - internal
     # Uncomment to reach the API directly from the host while testing without the tunnel.
     # ports:
     #   - "${API_PORT:-3000}:3000"
@@ -32,6 +43,31 @@ services:
       SCRAPER_BATCH_INTERVAL_SECONDS: ${SCRAPER_BATCH_INTERVAL_SECONDS:-14400}
       PLAYWRIGHTHEADLESS: ${PLAYWRIGHTHEADLESS:-True}
 
+  # Runs scraper/function/verifier.ts as an HTTP service so the API can request
+  # product verification screenshots without needing Node.js in its own image.
+  verifier:
+    build:
+      context: ../scraper
+      dockerfile: Dockerfile
+    image: scoopy-scraper
+    restart: unless-stopped
+    command: ["xvfb-run", "-a", "node", "dist/function/verifierServer.js"]
+    env_file:
+      - ../.env
+    environment:
+      VERIFIER_PORT: 4000
+      SCREENSHOT_DIR: /app/tmp/screenshot
+    volumes:
+      - screenshots:/app/tmp/screenshot
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - internal
+
 networks:
   # External network created by the docker-compose project that already runs
   # the Cloudflare tunnel (cloudflared). Set TUNNEL_NETWORK_NAME in .env to
@@ -39,3 +75,10 @@ networks:
   tunnel:
     name: ${TUNNEL_NETWORK_NAME:-tunnel_net}
     external: true
+  # Private network for api <-> verifier service-to-service calls.
+  internal: {}
+
+volumes:
+  # Shared between "api" (reads, to serve /screenshots/:filename) and
+  # "verifier" (writes, after capturing each screenshot).
+  screenshots:

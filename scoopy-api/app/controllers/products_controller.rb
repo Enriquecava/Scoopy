@@ -286,7 +286,7 @@ class ProductsController < ApplicationController
     filename = params[:filename].to_s
     return head :not_found if filename.blank? || !filename.match?(/\A[a-f0-9-]{36}\.png\z/)
 
-    screenshot_dir = Rails.root.parent.join("scraper/tmp/screenshot").expand_path
+    screenshot_dir = TemporaryScreenshotService::DIRECTORY.expand_path
     file_path = screenshot_dir.join(filename)
     return head :not_found unless file_path.file?
 

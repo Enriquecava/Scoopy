@@ -16,6 +16,12 @@ FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-jammy
 WORKDIR /app
 ENV NODE_ENV=production
 
+# verifier.ts launches Chromium headed (headless: false) for anti-bot evasion,
+# so it needs a virtual display to run inside a container.
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y xvfb && \
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+
 COPY package.json package-lock.json ./
 # NODE_ENV=production makes npm skip devDependencies by default; @playwright/test
 # is a devDependency but is required at runtime by the batch processor.

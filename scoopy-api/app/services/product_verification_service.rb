@@ -1,4 +1,4 @@
-require "timeout"
+require "net/http"
 
 class ProductVerificationService
   MAX_BATCH_SIZE = 5
@@ -123,46 +123,30 @@ class ProductVerificationService
     end
 
     def verify_product(provider_id, ssn)
-      require "open3"
-
       TemporaryScreenshotService.cleanup_expired
 
-      script = <<~JS
-        (async () => {
-          const { verifyProductExist } = await import('./scraper/function/verifier.ts');
-          const fileName = await verifyProductExist(#{provider_id}, #{JSON.generate(ssn)});
-          process.stdout.write(JSON.stringify({ file_name: fileName }));
-        })();
-      JS
+      uri = URI.parse(verifier_url)
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.open_timeout = 5
+      http.read_timeout = PROCESS_TIMEOUT_SECONDS
 
-      stdout = nil
-      stderr = nil
-      status = nil
-      pid = nil
+      request = Net::HTTP::Post.new(uri.request_uri, "Content-Type" => "application/json")
+      request.body = { provider_id: provider_id, ssn: ssn }.to_json
 
-      begin
-        Timeout.timeout(PROCESS_TIMEOUT_SECONDS) do
-          Open3.popen3("npx", "--no-install", "tsx", "--eval", script, chdir: Rails.root.parent.to_s, pgroup: true) do |_stdin, stdout_io, stderr_io, wait_thr|
-            pid = wait_thr.pid
-            stdout_reader = Thread.new { stdout_io.read }
-            stderr_reader = Thread.new { stderr_io.read }
-            stdout = stdout_reader.value
-            stderr = stderr_reader.value
-            status = wait_thr.value
-          end
-        end
-      rescue Timeout::Error
-        begin
-          Process.kill("TERM", -pid) if pid
-        rescue Errno::ESRCH
-          # Process already terminated
-        end
-        raise StandardError, "Verification timed out"
+      response = http.request(request)
+      payload = begin
+        JSON.parse(response.body)
+      rescue JSON::ParserError, TypeError
+        nil
       end
 
-      raise StandardError, stderr.to_s.strip unless status.success?
+      unless response.is_a?(Net::HTTPSuccess)
+        message = payload.is_a?(Hash) ? payload["error"] : nil
+        raise StandardError, message.presence || "Verifier request failed (#{response.code})"
+      end
 
-      payload = JSON.parse(stdout)
+      raise StandardError, "Invalid screenshot payload returned by verifier" unless payload.is_a?(Hash)
+
       file_name = payload.fetch("file_name").to_s
       raise StandardError, "Invalid screenshot filename returned by verifier" unless file_name.match?(/\A[a-f0-9-]{36}\.png\z/)
 
@@ -170,8 +154,12 @@ class ProductVerificationService
       raise StandardError, "Screenshot file was not created" unless file_path.file?
 
       "/screenshots/#{file_name}"
-    rescue JSON::ParserError
-      raise StandardError, "Invalid screenshot payload returned by verifier"
+    rescue Net::OpenTimeout, Net::ReadTimeout
+      raise StandardError, "Verification timed out"
+    end
+
+    def verifier_url
+      ENV.fetch("SCRAPER_VERIFIER_URL", "http://localhost:4000/verify")
     end
   end
 end

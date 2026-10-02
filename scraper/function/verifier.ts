@@ -89,7 +89,11 @@ export async function verifyProductExist(
 
     const result = await verifier({ context, productId: ssn, url });
 
-    const screenshotDir = path.resolve(process.cwd(), 'scraper', 'tmp', 'screenshot');
+    // SCREENSHOT_DIR lets the containerized verifier server write to a path
+    // shared (via a Docker volume) with the Rails API that serves the file.
+    const screenshotDir = process.env.SCREENSHOT_DIR
+      ? path.resolve(process.env.SCREENSHOT_DIR)
+      : path.resolve(process.cwd(), 'scraper', 'tmp', 'screenshot');
     await fs.mkdir(screenshotDir, { recursive: true });
 
     const fileName = `${crypto.randomUUID()}.png`;
