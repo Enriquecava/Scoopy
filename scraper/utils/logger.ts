@@ -29,6 +29,8 @@ export const VERIFIER_LOG_EVENT = {
   FAILED_TO_GET_PROVIDER_URL: 'verifier.provider.failed_to_get_url',
   INVALID_PRODUCT_INPUT: 'verifier.input.invalid_product',
   UNSUPPORTED_PROVIDER: 'verifier.provider.unsupported',
+  SERVER_STARTED: 'verifier.server.started',
+  REQUEST_FAILED: 'verifier.server.request_failed',
 } as const;
 
 export function normalizeLogError(error: unknown): Record<string, unknown> {

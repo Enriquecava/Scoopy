@@ -1,0 +1,23 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    image: scoopy-frontend
+    restart: unless-stopped
+    networks:
+      - tunnel
+    # Uncomment to reach the frontend directly from the host while testing without the tunnel.
+    # ports:
+    #   - "${FRONTEND_PORT:-8080}:80"
+
+networks:
+  # Same external network used by scoopy-api/docker-compose.yml and the
+  # compose project that runs the Cloudflare tunnel (cloudflared).
+  tunnel:
+    name: ${TUNNEL_NETWORK_NAME:-tunnel_net}
+    external: true

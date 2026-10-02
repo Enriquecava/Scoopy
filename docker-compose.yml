@@ -1,0 +1,3 @@
+include:
+  - scoopy-api/docker-compose.yml
+  - frontend/docker-compose.yml

@@ -1,5 +1,7 @@
 class TemporaryScreenshotService
-  DIRECTORY = Rails.root.parent.join("scraper/tmp/screenshot")
+  # SCREENSHOT_DIRECTORY lets this point at a path shared (via a Docker volume)
+  # with the scraper's verifier container; defaults to the local sibling-repo layout.
+  DIRECTORY = Pathname.new(ENV.fetch("SCREENSHOT_DIRECTORY", Rails.root.parent.join("scraper/tmp/screenshot").to_s))
   TTL = 1.hour
 
   def self.cleanup_expired
