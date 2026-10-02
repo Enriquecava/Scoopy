@@ -9,8 +9,10 @@ services:
       - ../.env
     environment:
       RAILS_ENV: production
+      SOLID_QUEUE_IN_PUMA: "true"
       RAILS_MASTER_KEY: ${RAILS_MASTER_KEY}
-      PORT: ${API_PORT:-3000}
+      # Fixed: must match the port Puma actually listens on inside the container.
+      PORT: 3000
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
     networks:
       - tunnel
@@ -27,7 +29,8 @@ services:
     env_file:
       - ../.env
     environment:
-      SCRAPER_BATCH_INTERVAL_SECONDS: ${SCRAPER_BATCH_INTERVAL_SECONDS:-3600}
+      SCRAPER_BATCH_INTERVAL_SECONDS: ${SCRAPER_BATCH_INTERVAL_SECONDS:-14400}
+      PLAYWRIGHTHEADLESS: ${PLAYWRIGHTHEADLESS:-True}
 
 networks:
   # External network created by the docker-compose project that already runs

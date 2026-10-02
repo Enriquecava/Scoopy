@@ -17,7 +17,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# @playwright/test is a devDependency but is required at runtime by the batch processor.
+RUN npm ci
 
 COPY --from=build /app/dist ./dist
 COPY docker/run-batch.sh ./docker/run-batch.sh

@@ -3,7 +3,7 @@
 # This is the "internal cron" for the scraper container.
 set -e
 
-INTERVAL="${SCRAPER_BATCH_INTERVAL_SECONDS:-3600}"
+INTERVAL="${SCRAPER_BATCH_INTERVAL_SECONDS:-14400}"
 
 while true; do
   echo "[run-batch] Starting batch run at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
