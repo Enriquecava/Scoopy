@@ -1,0 +1,107 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Gemfile.lock only locks arm64-darwin/x64-mingw/x86_64-linux platforms,
+      # and Kamal (config/deploy.yml) deploys amd64; match that on every host.
+      platforms:
+        - linux/amd64
+    image: scoopy-api
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      RAILS_ENV: production
+      SOLID_QUEUE_IN_PUMA: "true"
+      # RAILS_MASTER_KEY comes from env_file (../.env), not interpolated here:
+      # a bare ${VAR} with no default resolves to "" when this compose is
+      # included/run from an external project, silently overriding env_file.
+      # Fixed: must match the port Puma actually listens on inside the container.
+      PORT: 3000
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+      # "verifier" is the service name below; resolved via the shared "backend" network.
+      SCRAPER_VERIFIER_URL: ${SCRAPER_VERIFIER_URL:-http://verifier:4000/verify}
+      SCREENSHOT_DIRECTORY: /rails/tmp/screenshot
+    volumes:
+      - screenshots:/rails/tmp/screenshot
+    depends_on:
+      verifier:
+        condition: service_healthy
+    networks:
+      - tunnel
+      - backend
+    # Uncomment to reach the API directly from the host while testing without the tunnel.
+    # ports:
+    #   - "${API_PORT:-3000}:3000"
+
+  scraper:
+    build:
+      context: ../scraper
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+    image: scoopy-scraper
+    restart: unless-stopped
+    # Explicit allowlist instead of env_file: ../.env, so this browser-facing
+    # container never receives RAILS_MASTER_KEY or other API-only secrets.
+    environment:
+      PGHOST: ${PGHOST}
+      PGPORT: ${PGPORT}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE}
+      SCRAPER_LOG_FILE: ${SCRAPER_LOG_FILE}
+      SCRAPER_BATCH_DELAY_MS: ${SCRAPER_BATCH_DELAY_MS}
+      SCRAPER_BATCH_INTERVAL_SECONDS: ${SCRAPER_BATCH_INTERVAL_SECONDS:-14400}
+      PLAYWRIGHTHEADLESS: ${PLAYWRIGHTHEADLESS:-True}
+
+  # Runs scraper/function/verifier.ts as an HTTP service so the API can request
+  # product verification screenshots without needing Node.js in its own image.
+  verifier:
+    build:
+      context: ../scraper
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+    image: scoopy-scraper
+    restart: unless-stopped
+    command: ["xvfb-run", "-a", "node", "dist/function/verifierServer.js"]
+    # Explicit allowlist instead of env_file: ../.env, so this browser-facing
+    # container never receives RAILS_MASTER_KEY or other API-only secrets.
+    environment:
+      PGHOST: ${PGHOST}
+      PGPORT: ${PGPORT}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE}
+      SCRAPER_LOG_FILE: ${SCRAPER_LOG_FILE}
+      VERIFIER_PORT: 4000
+      VERIFIER_TIMEOUT_MS: ${VERIFIER_TIMEOUT_MS:-25000}
+      SCREENSHOT_DIR: /app/tmp/screenshot
+    volumes:
+      - screenshots:/app/tmp/screenshot
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - backend
+
+networks:
+  # External network created by the docker-compose project that already runs
+  # the Cloudflare tunnel (cloudflared). Set TUNNEL_NETWORK_NAME in .env to
+  # match that network's name so cloudflared can route traffic to "api".
+  tunnel:
+    name: ${TUNNEL_NETWORK_NAME:-tunnel_net}
+    external: true
+  # Private network for api <-> verifier calls. Not marked internal:true, since
+  # verifier also needs outbound internet access to reach provider websites.
+  backend:
+
+volumes:
+  # Shared between "api" (reads, to serve /screenshots/:filename) and
+  # "verifier" (writes, after capturing each screenshot).
+  screenshots:
