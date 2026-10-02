@@ -37,9 +37,16 @@ services:
       dockerfile: Dockerfile
     image: scoopy-scraper
     restart: unless-stopped
-    env_file:
-      - ../.env
+    # Explicit allowlist instead of env_file: ../.env, so this browser-facing
+    # container never receives RAILS_MASTER_KEY or other API-only secrets.
     environment:
+      PGHOST: ${PGHOST}
+      PGPORT: ${PGPORT}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE}
+      SCRAPER_LOG_FILE: ${SCRAPER_LOG_FILE}
+      SCRAPER_BATCH_DELAY_MS: ${SCRAPER_BATCH_DELAY_MS}
       SCRAPER_BATCH_INTERVAL_SECONDS: ${SCRAPER_BATCH_INTERVAL_SECONDS:-14400}
       PLAYWRIGHTHEADLESS: ${PLAYWRIGHTHEADLESS:-True}
 
@@ -52,10 +59,17 @@ services:
     image: scoopy-scraper
     restart: unless-stopped
     command: ["xvfb-run", "-a", "node", "dist/function/verifierServer.js"]
-    env_file:
-      - ../.env
+    # Explicit allowlist instead of env_file: ../.env, so this browser-facing
+    # container never receives RAILS_MASTER_KEY or other API-only secrets.
     environment:
+      PGHOST: ${PGHOST}
+      PGPORT: ${PGPORT}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE}
+      SCRAPER_LOG_FILE: ${SCRAPER_LOG_FILE}
       VERIFIER_PORT: 4000
+      VERIFIER_TIMEOUT_MS: ${VERIFIER_TIMEOUT_MS:-25000}
       SCREENSHOT_DIR: /app/tmp/screenshot
     volumes:
       - screenshots:/app/tmp/screenshot

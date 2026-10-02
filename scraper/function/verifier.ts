@@ -7,6 +7,7 @@ import {
   PRIMOR_PROVIDER_ID,
 } from '../utils/providers';
 import { chromium } from '@playwright/test';
+import type { Browser } from '@playwright/test';
 import { VerifierFn } from '../utils/types';
 import { getProviderUrl } from './postgres';
 import { amazonVerifier } from '../verifier/amazon';
@@ -25,6 +26,27 @@ const verifie: Record<number, VerifierFn> = {
   [EL_CORTE_INGLES_PROVIDER_ID]: elCorteInglesVerifier,
   [PRIMOR_PROVIDER_ID]: primorVerifier,
 };
+
+const VERIFIER_TIMEOUT_MS = Number(process.env.VERIFIER_TIMEOUT_MS ?? 25000);
+
+// Forces the browser closed when the deadline hits, so a hung page.goto/selector
+// wait doesn't keep an orphaned Chromium process running after the caller gave up.
+async function withDeadline<T>(promise: Promise<T>, browser: Browser): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      browser.close().catch(() => undefined).finally(() => {
+        reject(new Error('Verification timed out'));
+      });
+    }, VERIFIER_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([promise, deadline]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
 
 export async function verifyProductExist(
   provider_id: number,
@@ -87,7 +109,7 @@ export async function verifyProductExist(
       throw error;
     }
 
-    const result = await verifier({ context, productId: ssn, url });
+    const result = await withDeadline(verifier({ context, productId: ssn, url }), browser);
 
     // SCREENSHOT_DIR lets the containerized verifier server write to a path
     // shared (via a Docker volume) with the Rails API that serves the file.
@@ -95,6 +117,9 @@ export async function verifyProductExist(
       ? path.resolve(process.env.SCREENSHOT_DIR)
       : path.resolve(process.cwd(), 'scraper', 'tmp', 'screenshot');
     await fs.mkdir(screenshotDir, { recursive: true });
+    // This container runs as root but the API container (UID 1000) also needs to
+    // delete expired screenshots from this shared volume; keep the dir world-writable.
+    await fs.chmod(screenshotDir, 0o777);
 
     const fileName = `${crypto.randomUUID()}.png`;
     const filePath = path.join(screenshotDir, fileName);
