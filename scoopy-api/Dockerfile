@@ -46,6 +46,7 @@ COPY --from=build /rails /rails
 RUN groupadd --system --gid 1000 rails && \
     useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash && \
     mkdir -p db log storage tmp && \
+    chmod +x /rails/bin/docker-entrypoint && \
     chown -R rails:rails db log storage tmp
 USER 1000:1000
 
