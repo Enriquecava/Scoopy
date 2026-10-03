@@ -46,7 +46,7 @@ const server = http.createServer((req, res) => {
     });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   logger.info({ event: VERIFIER_LOG_EVENT.SERVER_STARTED, port: PORT }, 'Verifier server started');
 });
 

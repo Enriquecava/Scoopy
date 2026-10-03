@@ -92,10 +92,15 @@ export function flushLogger(): void {
 }
 
 export function closeLogger(): void {
-  if (transport && typeof (transport as { flushSync?: () => void }).flushSync === 'function') {
-    (transport as { flushSync: () => void }).flushSync();
-  }
   if (typeof (logger as { flush?: () => void }).flush === 'function') {
-    (logger as { flush: () => void }).flush();
+    (logger as { flush: (callback?: (error?: Error) => void) => void }).flush((error) => {
+      if (error) {
+        console.error('Failed to flush scraper logger:', error);
+      }
+      transport?.end();
+    });
+    return;
   }
+
+  transport?.end();
 }

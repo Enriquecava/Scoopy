@@ -25,6 +25,8 @@ services:
       SCREENSHOT_DIRECTORY: /rails/tmp/screenshot
     volumes:
       - screenshots:/rails/tmp/screenshot
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       verifier:
         condition: service_healthy
@@ -43,16 +45,18 @@ services:
         - linux/amd64
     image: scoopy-scraper
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # Explicit allowlist instead of env_file: ../.env, so this browser-facing
     # container never receives RAILS_MASTER_KEY or other API-only secrets.
     environment:
-      PGHOST: ${PGHOST}
-      PGPORT: ${PGPORT}
-      PGUSER: ${PGUSER}
-      PGPASSWORD: ${PGPASSWORD}
-      PGDATABASE: ${PGDATABASE}
+      PGHOST: ${PGHOST:?Set PGHOST in the Scoopy .env file}
+      PGPORT: ${PGPORT:?Set PGPORT in the Scoopy .env file}
+      PGUSER: ${PGUSER:?Set PGUSER in the Scoopy .env file}
+      PGPASSWORD: ${PGPASSWORD:?Set PGPASSWORD in the Scoopy .env file}
+      PGDATABASE: ${PGDATABASE:?Set PGDATABASE in the Scoopy .env file}
       SCRAPER_LOG_FILE: ${SCRAPER_LOG_FILE}
-      SCRAPER_BATCH_DELAY_MS: ${SCRAPER_BATCH_DELAY_MS}
+      SCRAPER_BATCH_DELAY_MS: ${SCRAPER_BATCH_DELAY_MS:-3000}
       SCRAPER_BATCH_INTERVAL_SECONDS: ${SCRAPER_BATCH_INTERVAL_SECONDS:-14400}
       PLAYWRIGHTHEADLESS: ${PLAYWRIGHTHEADLESS:-True}
 
@@ -70,23 +74,25 @@ services:
     # Explicit allowlist instead of env_file: ../.env, so this browser-facing
     # container never receives RAILS_MASTER_KEY or other API-only secrets.
     environment:
-      PGHOST: ${PGHOST}
-      PGPORT: ${PGPORT}
-      PGUSER: ${PGUSER}
-      PGPASSWORD: ${PGPASSWORD}
-      PGDATABASE: ${PGDATABASE}
-      SCRAPER_LOG_FILE: ${SCRAPER_LOG_FILE}
+      PGHOST: ${PGHOST:?Set PGHOST in the Scoopy .env file}
+      PGPORT: ${PGPORT:?Set PGPORT in the Scoopy .env file}
+      PGUSER: ${PGUSER:?Set PGUSER in the Scoopy .env file}
+      PGPASSWORD: ${PGPASSWORD:?Set PGPASSWORD in the Scoopy .env file}
+      PGDATABASE: ${PGDATABASE:?Set PGDATABASE in the Scoopy .env file}
       VERIFIER_PORT: 4000
+      SCRAPER_LOG_FILE: ${SCRAPER_LOG_FILE}
       VERIFIER_TIMEOUT_MS: ${VERIFIER_TIMEOUT_MS:-25000}
       SCREENSHOT_DIR: /app/tmp/screenshot
     volumes:
       - screenshots:/app/tmp/screenshot
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', (error) => { console.error(error.message); process.exit(1) })"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 180s
     networks:
       - backend
 

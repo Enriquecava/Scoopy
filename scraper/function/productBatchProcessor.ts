@@ -89,7 +89,6 @@ export async function processProductsFromDatabase(): Promise<void> {
 if (require.main === module) {
   processProductsFromDatabase().catch((error) => {
     logger.error({ event: LOG_EVENT.BATCH_PROCESSING_FAILED, error: normalizeLogError(error) }, 'Batch processing failed');
-    closeLogger();
     process.exitCode = 1;
   }).finally(() => {
     closeLogger();
