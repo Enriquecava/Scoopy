@@ -14,6 +14,7 @@ services:
     environment:
       RAILS_ENV: production
       SOLID_QUEUE_IN_PUMA: "true"
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in the Scoopy .env file}
       # RAILS_MASTER_KEY comes from env_file (../.env), not interpolated here:
       # a bare ${VAR} with no default resolves to "" when this compose is
       # included/run from an external project, silently overriding env_file.
