@@ -49,6 +49,7 @@ RUN npm ci --include=dev
 
 COPY --from=build /app/dist ./dist
 COPY docker/run-batch.sh ./docker/run-batch.sh
-RUN chmod +x ./docker/run-batch.sh
+COPY docker/start-verifier.sh ./docker/start-verifier.sh
+RUN chmod +x ./docker/run-batch.sh ./docker/start-verifier.sh
 
 CMD ["./docker/run-batch.sh"]
