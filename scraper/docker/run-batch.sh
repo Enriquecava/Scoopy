@@ -7,7 +7,7 @@ INTERVAL="${SCRAPER_BATCH_INTERVAL_SECONDS:-14400}"
 
 while true; do
   echo "[run-batch] Starting batch run at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  node dist/function/productBatchProcessor.js || echo "[run-batch] Batch run failed, will retry on next interval"
+  ./docker/with-xvfb.sh node dist/function/productBatchProcessor.js || echo "[run-batch] Batch run failed, will retry on next interval"
   echo "[run-batch] Sleeping ${INTERVAL}s"
   sleep "${INTERVAL}"
 done

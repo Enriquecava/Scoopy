@@ -4,17 +4,17 @@ set -eu
 DISPLAY_NUMBER="${VERIFIER_DISPLAY_NUMBER:-99}"
 DISPLAY_SOCKET="/tmp/.X11-unix/X${DISPLAY_NUMBER}"
 XVFB_PID=
-NODE_PID=
+COMMAND_PID=
 
 cleanup() {
-  if [ -n "$NODE_PID" ]; then
-    kill "$NODE_PID" 2>/dev/null || true
+  if [ -n "$COMMAND_PID" ]; then
+    kill "$COMMAND_PID" 2>/dev/null || true
   fi
   if [ -n "$XVFB_PID" ]; then
     kill "$XVFB_PID" 2>/dev/null || true
   fi
-  if [ -n "$NODE_PID" ]; then
-    wait "$NODE_PID" 2>/dev/null || true
+  if [ -n "$COMMAND_PID" ]; then
+    wait "$COMMAND_PID" 2>/dev/null || true
   fi
   if [ -n "$XVFB_PID" ]; then
     wait "$XVFB_PID" 2>/dev/null || true
@@ -24,6 +24,11 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+if [ "$#" -eq 0 ]; then
+  echo "Usage: $0 command [args...]" >&2
+  exit 2
+fi
 
 Xvfb ":${DISPLAY_NUMBER}" -screen 0 1280x1024x24 -nolisten tcp -ac &
 XVFB_PID=$!
@@ -43,6 +48,6 @@ while [ ! -S "$DISPLAY_SOCKET" ]; do
 done
 
 export DISPLAY=":${DISPLAY_NUMBER}"
-node /app/dist/function/verifierServer.js &
-NODE_PID=$!
-wait "$NODE_PID"
+"$@" &
+COMMAND_PID=$!
+wait "$COMMAND_PID"

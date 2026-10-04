@@ -71,7 +71,7 @@ services:
         - linux/amd64
     image: scoopy-scraper
     restart: unless-stopped
-    command: ["./docker/start-verifier.sh"]
+    command: ["./docker/with-xvfb.sh", "node", "dist/function/verifierServer.js"]
     # Explicit allowlist instead of env_file: ../.env, so this browser-facing
     # container never receives RAILS_MASTER_KEY or other API-only secrets.
     environment:
