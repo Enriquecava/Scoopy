@@ -65,6 +65,11 @@ const transport = logFilePath
     })
   : undefined;
 
+// Also write to stdout so `docker logs` / Alloy can collect them.
+const destination = transport
+  ? pino.multistream([{ stream: process.stdout }, { stream: transport }])
+  : undefined;
+
 export const logger = pino(
   {
     base: {
@@ -77,7 +82,7 @@ export const logger = pino(
       'cookie',
       'authorization',
       'req.headers.authorization',
-      'req.headers.cookie',
+      'destinationheaders.cookie',
       'headers.authorization',
       'headers.cookie',
     ],
