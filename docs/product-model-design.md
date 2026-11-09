@@ -9,6 +9,8 @@ quantity (stored in `units`) and a measurement (`unit_measures`), or neither
 when the quantity is unknown. Quantities are not inferred from product names.
 Administrators manage presentations and provider listings from product detail.
 A presentation with listings, prices or incidents cannot be deleted.
+If the unknown-quantity presentation is edited or deleted, it is recreated
+when a new listing or legacy record needs a default presentation.
 
 Each provider listing has a stable ID and belongs to a presentation. The
 provider and SSN combination is unique, but a provider can have several

@@ -20,7 +20,9 @@ class ProvidersProduct < ApplicationRecord
   private
 
   def assign_default_presentation
-    self.product_presentation ||= product&.default_presentation
+    return if product_presentation_id.present? || product_presentation.present?
+
+    self.product_presentation = product&.default_presentation
   end
 
   def presentation_belongs_to_product

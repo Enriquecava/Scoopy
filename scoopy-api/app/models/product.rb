@@ -13,7 +13,11 @@ class Product < ApplicationRecord
   validate :catalog_references_exist
 
   def default_presentation
-    product_presentations.find_by(unit_id: nil, unit_measure_id: nil)
+    presentation = product_presentations.find_by(unit_id: nil, unit_measure_id: nil)
+    return presentation if presentation
+
+    ProductPresentation.insert_all([{ product_id: id }], unique_by: :index_presentations_on_unknown_quantity)
+    product_presentations.find_by!(unit_id: nil, unit_measure_id: nil)
   end
 
   def price_history_count

@@ -13,8 +13,9 @@ class ProviderListingsController < ApplicationController
   end
 
   def update
-    listing = @product.providers_products.find(params[:id])
+    listing = nil
     ProvidersProduct.transaction do
+      listing = @product.providers_products.lock.find(params[:id])
       listing.update!(listing_params.except(:provider_id))
       listing.price_histories.update_all(product_presentation_id: listing.product_presentation_id)
       listing.scraper_incidents.update_all(product_presentation_id: listing.product_presentation_id)
@@ -27,14 +28,16 @@ class ProviderListingsController < ApplicationController
   end
 
   def assign_legacy
-    listing = @product.providers_products.find(params[:id])
     collection = { "prices" => @product.price_histories, "incidents" => @product.scraper_incidents }.fetch(params[:record_type])
-    record = collection.find(params[:record_id])
-    if record.providers_product_id.present? || record.provider_id != listing.provider_id
-      render json: { error: "incompatible_record" }, status: :unprocessable_content
-      return
+    ProvidersProduct.transaction do
+      listing = @product.providers_products.lock.find(params[:id])
+      record = collection.lock.find(params[:record_id])
+      if record.providers_product_id.present? || record.provider_id != listing.provider_id
+        render json: { error: "incompatible_record" }, status: :unprocessable_content
+        return
+      end
+      record.update!(providers_product: listing, product_presentation: listing.product_presentation)
     end
-    record.update!(providers_product: listing, product_presentation: listing.product_presentation)
     head :no_content
   rescue KeyError
     render json: { error: "invalid_record_type" }, status: :bad_request

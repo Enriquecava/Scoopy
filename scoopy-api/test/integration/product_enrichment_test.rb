@@ -60,6 +60,36 @@ class ProductEnrichmentTest < ActionDispatch::IntegrationTest
     assert_equal presentation.id, incident.reload.product_presentation_id
   end
 
+  test "recreates the unknown presentation after it is edited or deleted" do
+    product = Product.create!(name: "New product")
+    default = product.default_presentation
+    measure = UnitMeasure.create!(name: "litres")
+    patch "/products/#{product.id}/presentations/#{default.id}", params: { presentation: { value: 1, unit_measure_id: measure.id } }, headers: @admin_headers, as: :json
+    assert_response :success
+
+    post "/products/#{product.id}/provider_listings", params: { listing: { provider_id: @provider.id, ssn: "default-listing" } }, headers: @admin_headers, as: :json
+    assert_response :created
+    recreated = product.default_presentation
+    assert_not_equal default.id, recreated.id
+    assert_equal recreated.id, response.parsed_body.fetch("product_presentation_id")
+
+    product_without_listing = Product.create!(name: "Orphan product")
+    deleted = product_without_listing.default_presentation
+    delete "/products/#{product_without_listing.id}/presentations/#{deleted.id}", headers: @admin_headers, as: :json
+    assert_response :no_content
+    price = PriceHistory.create!(product: product_without_listing, provider: @provider, price: 9, currency: "EUR")
+    incident = ScraperIncident.create!(product: product_without_listing, provider: @provider)
+    assert_not_equal deleted.id, price.product_presentation_id
+    assert_equal price.product_presentation_id, incident.product_presentation_id
+  end
+
+  test "rejects a nonexistent presentation instead of silently using the default" do
+    assert_no_difference "ProvidersProduct.count" do
+      post "/products/#{@product.id}/provider_listings", params: { listing: { provider_id: @provider.id, ssn: "invalid-presentation", product_presentation_id: 9_999_999 } }, headers: @admin_headers, as: :json
+      assert_response :unprocessable_content
+    end
+  end
+
   test "orphan prices and incidents can be manually associated with the right provider" do
     orphan_provider = providers(:two)
     price = PriceHistory.create!(product: @product, provider: orphan_provider, price: 9, currency: "EUR")

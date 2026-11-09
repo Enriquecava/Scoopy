@@ -132,7 +132,7 @@ export async function upsertProductPrice(
     const result = await client.query(
       `INSERT INTO price_histories (provider_id, product_id, providers_product_id, product_presentation_id, price, currency, updated_at, created_at)
        SELECT provider_id, product_id, id, product_presentation_id, $2, $3, $4, $5
-       FROM providers_products WHERE id = $1`,
+       FROM providers_products WHERE id = $1 FOR SHARE`,
       [providers_product_id, price, currency, updated_at, created_at],
     );
 
@@ -156,7 +156,7 @@ export async function createOrKeepOpenScraperIncident(input: {
     const result = await client.query<{ id: string }>(
       `INSERT INTO scraper_incidents (provider_id, product_id, providers_product_id, product_presentation_id, status, created_at, updated_at)
        SELECT provider_id, product_id, id, product_presentation_id, 'open', NOW(), NOW()
-       FROM providers_products WHERE id = $1
+       FROM providers_products WHERE id = $1 FOR SHARE
        ON CONFLICT (providers_product_id) WHERE status = 'open' AND providers_product_id IS NOT NULL
        DO NOTHING
        RETURNING id;`,

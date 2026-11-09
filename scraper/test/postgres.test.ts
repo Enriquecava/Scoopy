@@ -17,6 +17,7 @@ const ssn = `test-${randomUUID()}`;
 let providerIds: string[] = [];
 let listingIds: string[] = [];
 let unitId: string | undefined;
+let presentationIds: string[] = [];
 
 before(async () => {
   const providers = await pool.query<{ id: string }>(
@@ -40,7 +41,49 @@ before(async () => {
             ($1, $5, $3, $6, NOW(), NOW()) RETURNING id`,
     [productId, providerIds[0], presentations.rows[0].id, presentations.rows[1].id, providerIds[1], ssn, `${ssn}-second`],
   );
+  presentationIds = presentations.rows.map((row) => row.id);
   listingIds = listings.rows.map((row) => row.id);
+});
+
+test('price and incident inserts wait for a concurrent presentation reassignment', async () => {
+  for (const kind of ['price', 'incident'] as const) {
+    const client = await pool.connect();
+    let pending: Promise<void | boolean> | undefined;
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE providers_products SET product_presentation_id = $1 WHERE id = $2', [presentationIds[1], listingIds[2]]);
+      pending = kind === 'price'
+        ? upsertProductPrice({ providers_product_id: listingIds[2], price: 42, currency: 'EUR' })
+        : createOrKeepOpenScraperIncident({ providers_product_id: listingIds[2] });
+      const deadline = Date.now() + 5000;
+      let blocked = false;
+      while (Date.now() < deadline) {
+        const waiting = await pool.query(
+          `SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
+           AND wait_event_type = 'Lock' AND query LIKE '%FROM providers_products WHERE id = $1 FOR SHARE%'`,
+        );
+        if (waiting.rowCount) {
+          blocked = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.ok(blocked, `${kind} insert must wait for the listing lock`);
+      await client.query('COMMIT');
+      await pending;
+      const table = kind === 'price' ? 'price_histories' : 'scraper_incidents';
+      const inserted = await pool.query<{ product_presentation_id: string }>(
+        `SELECT product_presentation_id FROM ${table} WHERE providers_product_id = $1`, [listingIds[2]],
+      );
+      assert.equal(inserted.rows[inserted.rows.length - 1]?.product_presentation_id, presentationIds[1]);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+      if (pending) await pending;
+      await pool.query('DELETE FROM price_histories WHERE providers_product_id = $1', [listingIds[2]]);
+      await pool.query('DELETE FROM scraper_incidents WHERE providers_product_id = $1', [listingIds[2]]);
+    }
+  }
 });
 
 after(async () => {
