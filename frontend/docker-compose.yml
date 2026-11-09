@@ -9,6 +9,11 @@ services:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
     image: scoopy-frontend
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - tunnel
     # Uncomment to reach the frontend directly from the host while testing without the tunnel.

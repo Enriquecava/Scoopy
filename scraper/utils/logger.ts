@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import pino from 'pino';
 
 export const LOG_EVENT = {
@@ -47,29 +45,9 @@ export function normalizeLogError(error: unknown): Record<string, unknown> {
   };
 }
 
-const scraperRoot = path.resolve(__dirname, '..');
-const configuredLogFile = process.env.SCRAPER_LOG_FILE;
-const logFilePath = configuredLogFile
-  ? path.resolve(configuredLogFile)
-  : undefined;
-
-if (logFilePath) {
-  fs.mkdirSync(path.dirname(logFilePath), { recursive: true });
-}
-
-const transport = logFilePath
-  ? pino.destination({
-      dest: logFilePath,
-      mkdir: true,
-      sync: false,
-    })
-  : undefined;
-
-// Also write to stdout so `docker logs` / Alloy can collect them.
-const destination = transport
-  ? pino.multistream([{ stream: process.stdout }, { stream: transport }])
-  : undefined;
-
+// In Docker, all logs must go to stdout so they can be collected by the container runtime
+// and forwarded to Grafana/Loki or other logging systems. File-based logging is not
+// recommended in containerized environments.
 export const logger = pino(
   {
     base: {
@@ -87,12 +65,19 @@ export const logger = pino(
       'headers.cookie',
     ],
   },
-  transport,
+  pino.destination({
+    dest: 1, // stdout
+    sync: false,
+  }),
 );
 
 export function flushLogger(): void {
-  if (transport && typeof (transport as { flushSync?: () => void }).flushSync === 'function') {
-    (transport as { flushSync: () => void }).flushSync();
+  if (typeof (logger as { flush?: () => void }).flush === 'function') {
+    (logger as { flush: (callback?: (error?: Error) => void) => void }).flush((error) => {
+      if (error) {
+        console.error('Failed to flush scraper logger:', error);
+      }
+    });
   }
 }
 
@@ -102,10 +87,6 @@ export function closeLogger(): void {
       if (error) {
         console.error('Failed to flush scraper logger:', error);
       }
-      transport?.end();
     });
-    return;
   }
-
-  transport?.end();
 }
