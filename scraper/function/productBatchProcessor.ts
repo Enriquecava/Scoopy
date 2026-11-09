@@ -29,7 +29,7 @@ export async function processProductsFromDatabase(): Promise<void> {
      });
 
     try {
-      for (const [index, { ssn, provider_id, product_id ,url}] of result.entries()) {
+      for (const [index, { ssn, provider_id, product_id, providers_product_id, url }] of result.entries()) {
         const productStartedAt = performance.now();
 
         try {
@@ -38,11 +38,11 @@ export async function processProductsFromDatabase(): Promise<void> {
             ssn,
             provider_id,
             product_id,
+            providers_product_id,
             url,
           );
           await upsertProductPrice({
-            provider_id,
-            product_id,
+            providers_product_id,
             price,
             currency: 'EUR',
           });

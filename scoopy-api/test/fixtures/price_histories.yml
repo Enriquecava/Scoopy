@@ -2,10 +2,13 @@ one:
   price: 9.99
   currency: EUR
   product: one
+  product_presentation: one
+  providers_product: one
   provider: one
 
 two:
   price: 14.99
   currency: EUR
   product: two
+  product_presentation: two
   provider: one

@@ -86,18 +86,38 @@ cd scraper
 npm install
 ```
 
-Run a single product scrape by SSN:
-from scoopy folder
+Run a single product scrape by SSN from `scraper/`:
 
 ```bash
-npx tsx scraper/function/productProcessor.ts <SSN>                                
+npx tsx function/productProcessor.ts <SSN> [provider_id]
 ```
 
-Run the batch processor for all products in the database:
-from scoopy folder
+The provider ID is required if the same SSN exists at more than one provider.
+The batch processor handles each provider listing independently, including
+multiple presentations of the same product at one provider.
+
+Run the batch processor for all products in the database from `scraper/`:
 ```bash
-npx tsx scraper/function/productBatchProcessor.ts 
+npx tsx function/productBatchProcessor.ts
 ```
+
+The database integration test requires an isolated, migrated PostgreSQL
+database whose name ends in `_test`. Set the usual `PGHOST`, `PGPORT`, `PGUSER`,
+`PGPASSWORD` and `PGDATABASE` variables, then run from `scraper/`:
+
+```bash
+node --import tsx --test test/postgres.test.ts
+```
+
+The product-detail browser tests reuse the scraper's Playwright dependency.
+Start the frontend built with its default API URL (`http://localhost:3000`),
+then run from `scraper/` with `FRONTEND_TEST_URL` set to that frontend's URL:
+
+```bash
+FRONTEND_TEST_URL=http://localhost:4173 node --import tsx --test test/product-detail.test.ts
+```
+
+These browser tests mock the API; they do not modify application data.
 
 If you want browser windows visible while debugging, leave `PLAYWRIGHTHEADLESS` unset or set it to any value other than `True`.
 

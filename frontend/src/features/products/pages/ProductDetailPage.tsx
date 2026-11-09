@@ -4,18 +4,23 @@ import { ArrowLeft, PackageOpen, Pencil, Save, Trash2, TrendingUp, X } from 'luc
 import { apiClient } from '../../../shared/api/client'
 import { useAuth } from '../../../app/providers/AuthProvider'
 import { useTranslation } from '../../../shared/i18n'
+import { ProductEnrichment } from '../components/ProductEnrichment'
 
 type ProviderProduct = {
-  id?: [string | number, string | number] | string | number
+  id: number
   provider_id: string | number
   ssn: string | null
   provider_name: string | null
+  product_presentation_id: number
 }
 
 type ProductDetail = {
   id: string | number
   name: string
   providers_products?: ProviderProduct[]
+  brand: { id: number; name: string } | null
+  category: { id: number; name: string } | null
+  presentations: { id: number; unit: { value: string } | null; unit_measure: { name: string } | null }[]
 }
 
 type PriceHistoryItem = {
@@ -23,6 +28,8 @@ type PriceHistoryItem = {
   currency: string | null
   created_at: string
   provider_name: string | null
+  providers_product_id: number | null
+  product_presentation_id: number
 }
 
 type PriceHistoryPayload = {
@@ -34,6 +41,8 @@ type PriceHistoryPayload = {
 type ScraperIncident = {
   provider_id: string | number
   provider_name: string | null
+  providers_product_id: number | null
+  product_presentation_id: number
   created_at: string
 }
 
@@ -54,12 +63,9 @@ type YAxisDomain = {
 }
 
 function providerProductKey(provider: ProviderProduct, index = 0) {
+  if (provider.id != null) return String(provider.id)
   if (provider.provider_id !== undefined && provider.provider_id !== null) {
     return String(provider.provider_id)
-  }
-
-  if (Array.isArray(provider.id)) {
-    return `${provider.id[0]}:${provider.id[1]}`
   }
 
   return String(provider.id ?? index)
@@ -156,7 +162,8 @@ export function ProductDetailPage() {
   const { isAuthenticated, role } = useAuth()
   const { t, locale } = useTranslation()
   const [product, setProduct] = useState<ProductDetail | null>(null)
-  const [priceHistory, setPriceHistory] = useState<PriceHistoryItem[]>([])
+  const [allPriceHistory, setPriceHistory] = useState<PriceHistoryItem[]>([])
+  const [selectedPresentation, setSelectedPresentation] = useState<number | null>(null)
   const [scraperIncidents, setScraperIncidents] = useState<ScraperIncident[]>([])
   const [activePoint, setActivePoint] = useState<ChartPoint | null>(null)
   const [loading, setLoading] = useState(true)
@@ -191,6 +198,7 @@ export function ProductDetailPage() {
         const historyPayload = historyResponse.data as PriceHistoryPayload
 
         setProduct(productPayload)
+        setSelectedPresentation(productPayload.presentations[0]?.id ?? null)
         setEditName(productPayload.name)
         setEditProviders(productPayload.providers_products ?? [])
         setPriceHistory(Array.isArray(historyPayload.price_history) ? historyPayload.price_history : [])
@@ -199,9 +207,9 @@ export function ProductDetailPage() {
           const incidentsResponse = await apiClient.get(`/products/${id}/incidents`)
           setScraperIncidents(Array.isArray(incidentsResponse.data) ? incidentsResponse.data : [])
         } catch {
-          setScraperIncidents([])
+          setError('products.detail.incidentsLoadError')
         }
-      } catch (err) {
+      } catch {
         setError('products.detail.productLoadError')
       } finally {
         setLoading(false)
@@ -231,6 +239,7 @@ export function ProductDetailPage() {
           name: editName.trim(),
           providers_products_attributes: editProviders.map((provider) => ({
             provider_id: provider.provider_id,
+            id: provider.id,
             ssn: provider.ssn?.trim() ?? '',
           })),
         },
@@ -262,6 +271,11 @@ export function ProductDetailPage() {
     }
   }
 
+  const priceHistory = useMemo(
+    () => allPriceHistory.filter((entry) => entry.product_presentation_id === selectedPresentation),
+    [allPriceHistory, selectedPresentation],
+  )
+
   const lastFetchedAt = useMemo(() => {
     if (priceHistory.length === 0) {
       return null
@@ -280,15 +294,14 @@ export function ProductDetailPage() {
     ;[...priceHistory]
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .forEach((entry) => {
-        const providerName = entry.provider_name ?? t('products.detail.provider')
-
-        if (!prices.has(providerName)) {
-          prices.set(providerName, entry)
+        const key = String(entry.providers_product_id)
+        if (entry.providers_product_id !== null && !prices.has(key)) {
+          prices.set(key, entry)
         }
       })
 
     return prices
-  }, [priceHistory, t])
+  }, [priceHistory])
 
   const chartPoints = useMemo(() => {
     const groupedEntries = new Map<string, { entry: PriceHistoryItem; numericPrice: number }>()
@@ -385,6 +398,7 @@ export function ProductDetailPage() {
               <div>
                 <p className="text-sm uppercase tracking-[0.35em] text-cyan-400">{t('products.detail.productLabel')}</p>
                 <h2 className="mt-2 text-2xl font-semibold">{product.name}</h2>
+                <p className="mt-2 text-sm text-slate-400">{[product.brand?.name, product.category?.name].filter(Boolean).join(' · ')}</p>
                 <p className="mt-2 text-sm text-slate-400">{t('products.detail.refreshInfo')}</p>
               </div>
               {role === 'admin' ? (
@@ -428,14 +442,14 @@ export function ProductDetailPage() {
               <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-5">
                 <h3 className="text-lg font-semibold">{t('products.detail.providers')}</h3>
                 <div className="mt-4 space-y-3">
-                  {(product.providers_products ?? []).length > 0 ? (
-                    (product.providers_products ?? []).map((provider, index) => {
+                  {(product.providers_products ?? []).filter((provider) => provider.product_presentation_id === selectedPresentation).length > 0 ? (
+                    (product.providers_products ?? []).filter((provider) => provider.product_presentation_id === selectedPresentation).map((provider, index) => {
                       const providerKey = providerProductKey(provider, index)
                       const providerName = provider.provider_name ?? t('products.detail.provider')
                       const incident = scraperIncidents.find(
-                        (item) => String(item.provider_id) === String(provider.provider_id),
+                        (item) => item.providers_product_id === provider.id,
                       )
-                      const latestPrice = latestPriceByProvider.get(providerName)
+                      const latestPrice = latestPriceByProvider.get(String(provider.id))
                       const numericPrice = latestPrice ? Number.parseFloat(String(latestPrice.price)) : Number.NaN
                       const isActive = !incident
 
@@ -484,6 +498,20 @@ export function ProductDetailPage() {
                 </div>
               </div>
             </div>
+          </section>
+
+          <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
+            <label className="block text-sm text-slate-300">
+              {t('products.enrichment.presentation')}
+              <select value={selectedPresentation ?? ''} onChange={(event) => setSelectedPresentation(Number(event.target.value))} className="ml-3 rounded-lg bg-slate-950 p-2 text-slate-100">
+                {product.presentations.map((presentation) => (
+                  <option key={presentation.id} value={presentation.id}>
+                    {presentation.unit && presentation.unit_measure ? `${presentation.unit.value} ${presentation.unit_measure.name}` : t('products.enrichment.unknown')}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {role === 'admin' ? <ProductEnrichment product={product} onChanged={() => window.location.reload()} /> : null}
           </section>
 
           {actionMessage ? <p className="rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-300">{actionMessage}</p> : null}

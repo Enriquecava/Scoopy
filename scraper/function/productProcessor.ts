@@ -27,6 +27,7 @@ export async function scrapeAndStoreProductPrice(
   asin: string,
   provider_id: number,
   product_id: UUID,
+  providers_product_id: string,
   url: string,
 ): Promise<number> {
   if (!asin || asin.trim() === '') {
@@ -60,7 +61,7 @@ export async function scrapeAndStoreProductPrice(
       })
       const price = await scraper({ context: context, productId: asin, url: url });
       await context.close();
-      await closeScraperIncident({ provider_id, product_id, asin });
+      await closeScraperIncident({ provider_id, product_id, providers_product_id, asin });
       return price;
     } catch (error) {
       await context.close();
@@ -76,7 +77,7 @@ export async function scrapeAndStoreProductPrice(
       }, `Provider scraper failed on attempt ${attempt}/${MAX_SCRAPER_RETRIES}`);
 
       if (attempt === MAX_SCRAPER_RETRIES) {
-        await openScraperIncident({ provider_id, product_id, asin });
+        await openScraperIncident({ provider_id, product_id, providers_product_id, asin });
         throw error;
       }
     }
@@ -93,7 +94,12 @@ async function runFromCli(asin?: string): Promise<void> {
     logger.warn({ event: LOG_EVENT.INVALID_CLI_INPUT }, 'ASIN is required');
     throw new Error('ASIN is required');
   }
-  const products = await getProductsBySSN(targetAsin);
+  const providerArg = process.argv[3];
+  const providerId = providerArg === undefined ? undefined : Number(providerArg);
+  if (providerId !== undefined && (!Number.isInteger(providerId) || providerId <= 0)) {
+    throw new Error('Provider ID must be a positive integer');
+  }
+  const products = await getProductsBySSN(targetAsin, providerId);
   if (!products) {
     logger.warn({ event: LOG_EVENT.PRODUCT_NOT_FOUND, asin: targetAsin }, 'No product found for SSN/ASIN');
     throw new Error(`No product found for SSN/ASIN: ${targetAsin}`);
@@ -111,12 +117,12 @@ async function runFromCli(asin?: string): Promise<void> {
       products.ssn,
       products.provider_id,
       products.product_id,
+      products.providers_product_id,
       products.url,
     );
     
     await upsertProductPrice({
-      provider_id: products.provider_id,
-      product_id: products.product_id,
+      providers_product_id: products.providers_product_id,
       price,
       currency: 'EUR',
     });

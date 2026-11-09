@@ -5,11 +5,12 @@ import { LOG_EVENT, logger } from '../utils/logger';
 export async function openScraperIncident(input: {
   provider_id: number;
   product_id: UUID;
+  providers_product_id: string;
   asin: string;
 }): Promise<boolean> {
-  const { provider_id, product_id, asin } = input;
+  const { provider_id, product_id, providers_product_id, asin } = input;
 
-  const created = await createOrKeepOpenScraperIncident({ provider_id, product_id });
+  const created = await createOrKeepOpenScraperIncident({ providers_product_id });
 
   if (created) {
     logger.warn({
@@ -33,11 +34,12 @@ export async function openScraperIncident(input: {
 export async function closeScraperIncident(input: {
   provider_id: number;
   product_id: UUID;
+  providers_product_id: string;
   asin: string;
 }): Promise<boolean> {
-  const { provider_id, product_id, asin } = input;
+  const { provider_id, product_id, providers_product_id, asin } = input;
 
-  const resolved = await resolveOpenScraperIncident({ provider_id, product_id });
+  const resolved = await resolveOpenScraperIncident({ providers_product_id });
 
   if (resolved) {
     logger.info({
