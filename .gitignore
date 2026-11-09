@@ -33,3 +33,7 @@ node_modules/
 .DS_Store
 /.bundle
 
+
+# Compiled output
+/scraper/dist/
+/frontend/dist/
