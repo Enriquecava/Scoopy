@@ -4,11 +4,17 @@ class ProductPayload
   end
 
   def self.detail(product)
+    ActiveRecord::Associations::Preloader.new(
+      records: [product],
+      associations: [:brand, :category, { providers_products: :provider }, { product_presentations: [:unit, :unit_measure] }]
+    ).call
+    listings = product.providers_products.map { |listing| listing_payload(listing) }
+    listings_by_presentation = listings.group_by { |listing| listing[:product_presentation_id] }
     list(product).merge(
-      providers_products: product.providers_products.map { |listing| listing_payload(listing) },
+      providers_products: listings,
       presentations: product.product_presentations.map { |presentation|
         presentation_payload(presentation).merge(
-          providers_products: presentation.providers_products.map { |listing| listing_payload(listing) }
+          providers_products: listings_by_presentation.fetch(presentation.id, [])
         )
       }
     )

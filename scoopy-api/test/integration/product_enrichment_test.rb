@@ -60,6 +60,45 @@ class ProductEnrichmentTest < ActionDispatch::IntegrationTest
     assert_equal presentation.id, incident.reload.product_presentation_id
   end
 
+  test "SSN-only and unchanged presentation updates do not rewrite history" do
+    ScraperIncident.create!(product: @product, provider: @provider, providers_product: @listing)
+    queries = []
+    subscriber = ->(_name, _start, _finish, _id, payload) { queries << payload[:sql] }
+    ActiveSupport::Notifications.subscribed(subscriber, "sql.active_record") do
+      [
+        { ssn: "updated-ssn" },
+        { product_presentation_id: @listing.product_presentation_id }
+      ].each do |attrs|
+        patch "/products/#{@product.id}/provider_listings/#{@listing.id}", params: { listing: attrs }, headers: @admin_headers, as: :json
+        assert_response :success
+      end
+    end
+    assert_empty queries.grep(/\AUPDATE "(price_histories|scraper_incidents)"/i)
+  end
+
+  test "product detail loads nested associations without per-presentation queries" do
+    measure = UnitMeasure.create!(name: "query test measure")
+    3.times do |index|
+      presentation = @product.product_presentations.create!(unit: Unit.create!(value: 101 + index), unit_measure: measure)
+      @product.providers_products.create!(provider: @provider, ssn: "query-test-#{index}", product_presentation: presentation)
+    end
+
+    queries = []
+    subscriber = ->(_name, _start, _finish, _id, payload) { queries << payload[:sql] unless payload[:cached] }
+    ActiveSupport::Notifications.subscribed(subscriber, "sql.active_record") do
+      get "/products/#{@product.id}", headers: @user_headers, as: :json
+    end
+    assert_response :success
+    payload = response.parsed_body
+    assert_equal 4, payload.fetch("presentations").length
+    assert_equal 4, payload.fetch("providers_products").length
+    assert payload.fetch("presentations").all? { |presentation| presentation.fetch("providers_products").one? }
+    %w[providers_products providers product_presentations units unit_measures].each do |table|
+      selects = queries.grep(/\ASELECT .* FROM "#{table}"/i)
+      assert_equal 1, selects.size, "expected one query for #{table}, got #{selects.inspect}"
+    end
+  end
+
   test "recreates the unknown presentation after it is edited or deleted" do
     product = Product.create!(name: "New product")
     default = product.default_presentation

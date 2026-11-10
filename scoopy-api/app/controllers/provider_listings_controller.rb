@@ -17,8 +17,10 @@ class ProviderListingsController < ApplicationController
     ProvidersProduct.transaction do
       listing = @product.providers_products.lock.find(params[:id])
       listing.update!(listing_params.except(:provider_id))
-      listing.price_histories.update_all(product_presentation_id: listing.product_presentation_id)
-      listing.scraper_incidents.update_all(product_presentation_id: listing.product_presentation_id)
+      if listing.saved_change_to_product_presentation_id?
+        listing.price_histories.update_all(product_presentation_id: listing.product_presentation_id)
+        listing.scraper_incidents.update_all(product_presentation_id: listing.product_presentation_id)
+      end
     end
     render json: ProductPayload.listing_payload(listing)
   rescue ActiveRecord::RecordInvalid => e

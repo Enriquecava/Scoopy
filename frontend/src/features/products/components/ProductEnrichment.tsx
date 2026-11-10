@@ -32,6 +32,9 @@ export function ProductEnrichment({ product, onChanged }: { product: Product; on
   const [legacy, setLegacy] = useState<{ type: 'prices' | 'incidents'; record: LegacyRecord }[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const selectedListingPresentation = product.presentations.some((item) => String(item.id) === listingPresentation)
+    ? listingPresentation
+    : String(product.presentations[0]?.id ?? '')
 
   useEffect(() => {
     const load = async () => {
@@ -130,11 +133,11 @@ export function ProductEnrichment({ product, onChanged }: { product: Product; on
       ))}
       <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => {
         event.preventDefault()
-        void run(() => apiClient.post(`/products/${product.id}/provider_listings`, { listing: { provider_id: provider, ssn, product_presentation_id: listingPresentation } }))
+        void run(() => apiClient.post(`/products/${product.id}/provider_listings`, { listing: { provider_id: provider, ssn, product_presentation_id: selectedListingPresentation || null } }))
       }}>
         <label>{t('products.detail.provider')}<select required className={`ml-2 ${inputClass}`} value={provider} onChange={(event) => setProvider(event.target.value)}><option value="">—</option>{providers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>SSN<input required className={`ml-2 ${inputClass}`} value={ssn} onChange={(event) => setSsn(event.target.value)} /></label>
-        <label>{t('products.enrichment.presentation')}<select required className={`ml-2 ${inputClass}`} value={listingPresentation} onChange={(event) => setListingPresentation(event.target.value)}>{product.presentations.map((item) => <option key={item.id} value={item.id}>{item.unit && item.unit_measure ? `${item.unit.value} ${item.unit_measure.name}` : t('products.enrichment.unknown')}</option>)}</select></label>
+        <label>{t('products.enrichment.presentation')}<select required={product.presentations.length > 0} className={`ml-2 ${inputClass}`} value={selectedListingPresentation} onChange={(event) => setListingPresentation(event.target.value)}>{product.presentations.length === 0 ? <option value="">{t('products.enrichment.unknown')}</option> : null}{product.presentations.map((item) => <option key={item.id} value={item.id}>{item.unit && item.unit_measure ? `${item.unit.value} ${item.unit_measure.name}` : t('products.enrichment.unknown')}</option>)}</select></label>
         <button disabled={busy} className={inputClass}>{t('products.enrichment.addListing')}</button>
       </form>
 
