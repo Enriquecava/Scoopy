@@ -50,6 +50,7 @@ RUN npm ci --include=dev
 COPY --from=build /app/dist ./dist
 COPY docker/run-batch.sh ./docker/run-batch.sh
 COPY docker/with-xvfb.sh ./docker/with-xvfb.sh
-RUN chmod +x ./docker/run-batch.sh ./docker/with-xvfb.sh
+COPY docker/start-verifier.sh ./docker/start-verifier.sh
+RUN chmod +x ./docker/run-batch.sh ./docker/with-xvfb.sh ./docker/start-verifier.sh
 
 CMD ["./docker/run-batch.sh"]

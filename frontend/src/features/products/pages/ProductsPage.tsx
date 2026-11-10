@@ -9,6 +9,8 @@ import { AddProductButton } from '../components/AddProductButton'
 type Product = {
   id: string | number
   name: string
+  brand?: { name: string } | null
+  category?: { name: string } | null
 }
 
 export function ProductsPage() {
@@ -179,7 +181,7 @@ export function ProductsPage() {
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-cyan-500/10 hover:text-cyan-200"
                       >
                         <PackageOpen className="h-4 w-4 text-cyan-400" />
-                        <span className="truncate">{product.name}</span>
+                        <span className="truncate">{product.name} {[product.brand?.name, product.category?.name].filter(Boolean).join(' · ')}</span>
                       </button>
                     </li>
                   ))}
@@ -218,6 +220,7 @@ export function ProductsPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold">{product.name}</h3>
+                    <p className="text-sm text-slate-400">{[product.brand?.name, product.category?.name].filter(Boolean).join(' · ')}</p>
                     <p className="text-sm text-slate-400">{t('common.activeProduct')}</p>
                   </div>
                 </div>

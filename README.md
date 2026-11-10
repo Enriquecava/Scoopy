@@ -22,6 +22,57 @@ Scoopy is split into three main parts:
 
 Each part has its own README with the detailed setup, structure, and behavior of that subproject.
 
+## Docker and Cloudflare Tunnel
+
+The root `docker-compose.yml` runs the API, frontend, scraper and verifier.
+PostgreSQL and Cloudflare Tunnel are external services; the tunnel must already
+be running and connected to the external Docker network named by
+`TUNNEL_NETWORK_NAME`. Configure the tunnel's public hostnames to route to
+`http://frontend:80` and `http://api:3000`, respectively. Neither application
+service needs a published host port for that arrangement.
+
+The Compose services use Linux `amd64` images, matching the API's locked
+platform and the deployment configuration. An `x86_64` Linux server runs these
+natively; an ARM server needs working `amd64` emulation and is not the native
+deployment target. Install Docker Engine and a Compose plugin that supports
+`include` (Compose 2.20 or newer); the host also needs outbound access to build
+images and to reach provider websites.
+
+Copy `example.env` to `.env` and configure the database, Rails secrets,
+`TUNNEL_NETWORK_NAME`, `VITE_API_URL` (the public HTTPS API URL), and
+`CORS_ALLOWED_ORIGINS` (including the public HTTPS frontend origin). The
+frontend URL is compiled into the image, so rebuild it when `VITE_API_URL`
+changes. After confirming the external network and tunnel routes:
+
+```bash
+docker compose up -d --build
+docker compose ps
+docker compose logs api scraper
+```
+
+The API entrypoint runs `db:prepare` and `solid_queue:prepare` before Puma
+starts. The scraper waits for the API health check, so a first batch cannot
+run before those preparations finish. If migration fails, the API does not
+become healthy and the scraper does not start. Stop any **previously running**
+scraper before upgrading the database, back up the database, and deploy the
+API and scraper together; startup ordering cannot stop an old container that
+is already running. See [product model migration](docs/product-model-design.md)
+for the irreversible migration and legacy data behavior.
+The verifier initializes the shared screenshot volume for the API's
+unprivileged UID/GID 1000 so Rails can read and remove expired screenshots.
+Keep that volume writable by the verifier during initialization.
+
+On Linux, `localhost` inside a container is not the host. For PostgreSQL
+running on the Docker host, use `PGHOST=host.docker.internal`: the Compose
+configuration maps that name to Docker's host gateway. PostgreSQL must listen
+on an address reachable from the Docker bridge networks, and its `pg_hba.conf`
+and the host firewall must allow the API and scraper connections. Restrict
+access to the required Docker networks; do not expose PostgreSQL publicly.
+If PostgreSQL is another container, put it and both clients on a shared Docker
+network and set `PGHOST` to its service name instead. The tunnel network must
+be a user-defined network shared with the `cloudflared` container so Docker DNS
+can resolve `api` and `frontend`.
+
 ## What Scoopy Does
 
 At a high level, Scoopy works like this:

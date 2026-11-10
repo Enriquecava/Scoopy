@@ -23,7 +23,7 @@ class ProductsController < ApplicationController
       return
     end
 
-    @products = Product.includes(:providers_products)
+    @products = Product.includes(:brand, :category)
     filter = params[:filter].presence
     filter = filter.to_s.strip
 
@@ -32,20 +32,13 @@ class ProductsController < ApplicationController
       @products = @products.where("products.name ILIKE ?", "%#{escaped_filter}%")
     end
 
-    render json: @products, only:[ :id, :name]
+    render json: @products.map { |product| ProductPayload.list(product) }
     
   end
 
   # GET /products/1
   def show
-    render json: @product.as_json(
-      include: [
-          providers_products: {
-            only: %i[id ssn provider_id],
-            methods: [:provider_name]
-          }
-      ]
-    )
+    render json: ProductPayload.detail(@product)
   end
 
   # POST /products
@@ -181,14 +174,7 @@ class ProductsController < ApplicationController
       return
     end
 
-    render json: @product.as_json(
-      include: [
-          providers_products: {
-            only: %i[id ssn provider_id],
-            methods: [:provider_name]
-          }
-      ]
-    ), status: :created, location: @product
+    render json: ProductPayload.detail(@product), status: :created, location: @product
   end
 
   #PATCH/PUT /products/1
@@ -203,7 +189,16 @@ class ProductsController < ApplicationController
         provider_id = attributes[:provider_id]
         raise ActiveRecord::RecordNotFound if provider_id.blank?
 
-        providers_product = @product.providers_products.find_by!(provider_id: provider_id)
+        providers_product = if attributes[:id].present?
+          @product.providers_products.find(attributes[:id])
+        else
+          matches = @product.providers_products.where(provider_id: provider_id).limit(2).to_a
+          raise ProductCreationError.new(status: :conflict, payload: { error: "listing_id_required" }) if matches.size > 1
+          matches.first || raise(ActiveRecord::RecordNotFound)
+        end
+        if providers_product.provider_id.to_s != provider_id.to_s
+          raise ProductCreationError.new(status: :bad_request, payload: { error: "provider mismatch" })
+        end
 
         if ActiveModel::Type::Boolean.new.cast(attributes[:_destroy])
           providers_product.destroy!
@@ -215,7 +210,7 @@ class ProductsController < ApplicationController
           ) if normalized_ssn.blank?
 
           candidate_pairs << [provider_id, normalized_ssn]
-          existing = duplicate_provider_product(provider_id, normalized_ssn)
+          existing = duplicate_provider_product(provider_id, normalized_ssn, excluding_id: providers_product.id)
           raise_duplicate_provider_product(existing) if existing
 
           providers_product.update!(ssn: normalized_ssn)
@@ -223,14 +218,7 @@ class ProductsController < ApplicationController
       end
     end
 
-    render json: @product.as_json(
-      include: [
-          providers_products: {
-            only: %i[id ssn provider_id],
-            methods: [:provider_name]
-          }
-      ]
-    )
+    render json: ProductPayload.detail(@product.reload)
   rescue ActiveRecord::RecordNotFound
     render json: { error: "provider product not found" }, status: :not_found
   rescue ProductCreationError => e
@@ -245,6 +233,8 @@ class ProductsController < ApplicationController
     render_duplicate_provider_product(conflict)
   rescue ActiveRecord::RecordInvalid => e
     render json: { errors: [{ error: "validation_failed", details: e.record.errors.full_messages }] }, status: :unprocessable_content
+  rescue ActiveRecord::RecordNotDestroyed
+    render json: { error: "in_use" }, status: :conflict
   end
 
   # DELETE /products/1
@@ -255,7 +245,7 @@ class ProductsController < ApplicationController
   # GET /products/1/price_history
   def price_history
     histories = @product.price_histories.order(created_at: :desc).as_json(
-      only: [:price, :currency, :created_at],
+      only: [:id, :price, :currency, :created_at, :provider_id, :providers_product_id, :product_presentation_id],
       methods: [:provider_name]
     )
 
@@ -268,13 +258,13 @@ class ProductsController < ApplicationController
 
   # GET /products/1/incidents
   def incidents
-    incidents = @product.scraper_incidents
-      .includes(:provider)
-      .where(status: :open)
+    scope = @product.scraper_incidents.includes(:provider)
+    scope = scope.where(status: :open) unless current_user.admin? && params[:include_resolved] == "true"
+    incidents = scope
       .order(created_at: :desc)
       .map do |incident|
         incident.as_json(
-          only: %i[id product_id provider_id status created_at],
+          only: %i[id product_id provider_id providers_product_id product_presentation_id status created_at],
           methods: [:provider_name]
         )
       end
@@ -355,11 +345,11 @@ class ProductsController < ApplicationController
   end
 
   private
-    def duplicate_provider_product(provider_id, ssn)
+    def duplicate_provider_product(provider_id, ssn, excluding_id: nil)
       return if provider_id.blank? || ssn.blank?
 
-      ProvidersProduct.includes(:product).find_by(provider_id: provider_id, ssn: ssn)
-        &.then { |provider_product| provider_product if provider_product.product_id != @product&.id }
+      ProvidersProduct.includes(:product).where(provider_id: provider_id, ssn: ssn)
+        .where.not(id: excluding_id).first
     end
 
     def raise_duplicate_provider_product(existing)
@@ -401,8 +391,8 @@ class ProductsController < ApplicationController
 
     def update_product_params
       params.require(:product).permit(
-        :name,
-        providers_products_attributes: [:ssn, :provider_id, :_destroy]
+        :name, :brand_id, :category_id,
+        providers_products_attributes: [:id, :ssn, :provider_id, :_destroy]
       )
     end
 end

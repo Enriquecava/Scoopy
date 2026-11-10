@@ -5,6 +5,7 @@ import { UserPlus } from 'lucide-react'
 import { useAuth } from '../../../app/providers/AuthProvider'
 import { apiClient } from '../../../shared/api/client'
 import { useTranslation } from '../../../shared/i18n'
+import { CatalogManager } from '../components/CatalogManager'
 
 export function AdminPage() {
   const { role } = useAuth()
@@ -80,6 +81,9 @@ export function AdminPage() {
           </button>
         </form>
       </section>
+      <CatalogManager catalog="brands" title={t('admin.brands')} />
+      <CatalogManager catalog="categories" title={t('admin.categories')} />
+      <CatalogManager catalog="unit_measures" title={t('admin.measures')} />
     </div>
   )
 }
