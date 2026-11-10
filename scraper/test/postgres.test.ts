@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import {
   closeDatabase, createOrKeepOpenScraperIncident, getProducts, getProductsBySSN,
-  resolveOpenScraperIncident, upsertProductPrice,
+  resolveOpenScraperIncident, upsertProductPrice, ListingSnapshot,
 } from '../function/postgres';
 
 if (!process.env.PGDATABASE?.endsWith('_test')) {
@@ -18,6 +18,12 @@ let providerIds: string[] = [];
 let listingIds: string[] = [];
 let unitId: string | undefined;
 let presentationIds: string[] = [];
+
+async function snapshot(id: string): Promise<ListingSnapshot> {
+  const listing = (await getProducts()).find((row) => row.providers_product_id === id);
+  assert.ok(listing);
+  return listing;
+}
 
 before(async () => {
   const providers = await pool.query<{ id: string }>(
@@ -45,22 +51,25 @@ before(async () => {
   listingIds = listings.rows.map((row) => row.id);
 });
 
-test('price and incident inserts wait for a concurrent presentation reassignment', async () => {
+test('stale scrape results are rejected after a concurrent reassignment', async () => {
   for (const kind of ['price', 'incident'] as const) {
     const client = await pool.connect();
+    const listing = await snapshot(listingIds[2]);
+    const target = kind === 'price' ? presentationIds[1] : presentationIds[0];
     let pending: Promise<void | boolean> | undefined;
     try {
       await client.query('BEGIN');
-      await client.query('UPDATE providers_products SET product_presentation_id = $1 WHERE id = $2', [presentationIds[1], listingIds[2]]);
+      await client.query('UPDATE providers_products SET product_presentation_id = $1, updated_at = clock_timestamp() WHERE id = $2', [target, listingIds[2]]);
       pending = kind === 'price'
-        ? upsertProductPrice({ providers_product_id: listingIds[2], price: 42, currency: 'EUR' })
-        : createOrKeepOpenScraperIncident({ providers_product_id: listingIds[2] });
+        ? upsertProductPrice({ ...listing, price: 42, currency: 'EUR' })
+        : createOrKeepOpenScraperIncident(listing);
+      const result = pending.then(() => null, (error: unknown) => error);
       const deadline = Date.now() + 5000;
       let blocked = false;
       while (Date.now() < deadline) {
         const waiting = await pool.query(
           `SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
-           AND wait_event_type = 'Lock' AND query LIKE '%FROM providers_products WHERE id = $1 FOR SHARE%'`,
+           AND wait_event_type = 'Lock' AND query LIKE '%SELECT 1 FROM providers_products%'`,
         );
         if (waiting.rowCount) {
           blocked = true;
@@ -70,12 +79,13 @@ test('price and incident inserts wait for a concurrent presentation reassignment
       }
       assert.ok(blocked, `${kind} insert must wait for the listing lock`);
       await client.query('COMMIT');
-      await pending;
+      assert.match(String(await result), /changed or was removed/);
+      pending = undefined;
       const table = kind === 'price' ? 'price_histories' : 'scraper_incidents';
       const inserted = await pool.query<{ product_presentation_id: string }>(
         `SELECT product_presentation_id FROM ${table} WHERE providers_product_id = $1`, [listingIds[2]],
       );
-      assert.equal(inserted.rows[inserted.rows.length - 1]?.product_presentation_id, presentationIds[1]);
+      assert.equal(inserted.rowCount, 0);
     } finally {
       await client.query('ROLLBACK');
       client.release();
@@ -105,19 +115,49 @@ after(async () => {
 test('batch queries, prices and incidents preserve the exact listing', async () => {
   const listings = (await getProducts()).filter((row) => row.product_id === productId);
   assert.equal(listings.length, 3);
-  await upsertProductPrice({ providers_product_id: listingIds[0], price: 10, currency: 'EUR' });
-  await upsertProductPrice({ providers_product_id: listingIds[1], price: 20, currency: 'EUR' });
+  const first = await snapshot(listingIds[0]);
+  const second = await snapshot(listingIds[1]);
+  await upsertProductPrice({ ...first, price: 10, currency: 'EUR' });
+  await upsertProductPrice({ ...second, price: 20, currency: 'EUR' });
   const prices = await pool.query<{ providers_product_id: string; product_presentation_id: string }>(
     'SELECT providers_product_id, product_presentation_id FROM price_histories WHERE product_id = $1 ORDER BY price', [productId],
   );
   assert.deepEqual(prices.rows.map((row) => row.providers_product_id), listingIds.slice(0, 2));
   assert.notEqual(prices.rows[0].product_presentation_id, prices.rows[1].product_presentation_id);
-  assert.equal(await createOrKeepOpenScraperIncident({ providers_product_id: listingIds[0] }), true);
-  assert.equal(await createOrKeepOpenScraperIncident({ providers_product_id: listingIds[1] }), true);
-  assert.equal(await createOrKeepOpenScraperIncident({ providers_product_id: listingIds[0] }), false);
-  assert.equal(await resolveOpenScraperIncident({ providers_product_id: listingIds[0] }), true);
+  assert.equal(await createOrKeepOpenScraperIncident(first), true);
+  assert.equal(await createOrKeepOpenScraperIncident(second), true);
+  assert.equal(await createOrKeepOpenScraperIncident(first), false);
+  assert.equal(await resolveOpenScraperIncident(first), true);
   const open = await pool.query('SELECT id FROM scraper_incidents WHERE product_id = $1 AND status = $2', [productId, 'open']);
   assert.equal(open.rowCount, 1);
   await assert.rejects(() => getProductsBySSN(ssn), /ambiguous/);
   assert.equal((await getProductsBySSN(ssn, Number(providerIds[0])))?.providers_product_id, listingIds[0]);
+});
+
+test('incidents remain open in their original presentation until the listing returns', async () => {
+  const id = listingIds[2];
+  const initial = await snapshot(id);
+  assert.equal(await createOrKeepOpenScraperIncident(initial), true);
+  await pool.query('UPDATE providers_products SET product_presentation_id = $1, updated_at = clock_timestamp() WHERE id = $2', [presentationIds[1], id]);
+  const moved = await snapshot(id);
+  assert.equal(await createOrKeepOpenScraperIncident(moved), true);
+  assert.equal(await resolveOpenScraperIncident(moved), true);
+  const old = await pool.query("SELECT status FROM scraper_incidents WHERE providers_product_id = $1 AND product_presentation_id = $2", [id, presentationIds[0]]);
+  assert.equal(old.rows[0].status, 'open');
+  await pool.query('UPDATE providers_products SET product_presentation_id = $1, updated_at = clock_timestamp() WHERE id = $2', [presentationIds[0], id]);
+  assert.equal(await resolveOpenScraperIncident(await snapshot(id)), true);
+  await pool.query('DELETE FROM scraper_incidents WHERE providers_product_id = $1', [id]);
+});
+
+test('a stale SSN cannot write prices or change incident status', async () => {
+  const id = listingIds[2];
+  const beforeChange = await snapshot(id);
+  assert.equal(await createOrKeepOpenScraperIncident(beforeChange), true);
+  await pool.query('UPDATE providers_products SET ssn = $1, updated_at = clock_timestamp() WHERE id = $2', [`changed-${ssn}`, id]);
+  await assert.rejects(() => upsertProductPrice({ ...beforeChange, price: 99, currency: 'EUR' }), /changed or was removed/);
+  await assert.rejects(() => resolveOpenScraperIncident(beforeChange), /changed or was removed/);
+  await assert.rejects(() => createOrKeepOpenScraperIncident(beforeChange), /changed or was removed/);
+  const incidents = await pool.query("SELECT status FROM scraper_incidents WHERE providers_product_id = $1", [id]);
+  assert.equal(incidents.rows[0].status, 'open');
+  await pool.query('DELETE FROM scraper_incidents WHERE providers_product_id = $1', [id]);
 });

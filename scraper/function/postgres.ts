@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import 'dotenv/config';
 import { UUID } from 'crypto';
 
@@ -17,8 +17,13 @@ function parseProviderId(value: string): number {
   return id;
 }
 
-export interface UpsertPriceInput {
+export interface ListingSnapshot {
   providers_product_id: string;
+  ssn: string;
+  listing_updated_at: string;
+}
+
+export interface UpsertPriceInput extends ListingSnapshot {
   price: number;
   currency: string;
   updated_at?: Date;
@@ -32,6 +37,7 @@ export async function getProducts(): Promise<
     product_id: UUID;
     providers_product_id: string;
     product_presentation_id: string;
+    listing_updated_at: string;
     url: string;
   }[]
 > {
@@ -43,9 +49,10 @@ export async function getProducts(): Promise<
       product_id: UUID;
       providers_product_id: string;
       product_presentation_id: string;
+      listing_updated_at: string;
       url: string
     }>(
-      'SELECT pp.ssn, pp.provider_id, pp.product_id, pp.id AS providers_product_id, pp.product_presentation_id, p.url FROM providers_products AS pp JOIN providers AS p ON pp.provider_id = p.id',
+      'SELECT pp.ssn, pp.provider_id, pp.product_id, pp.id AS providers_product_id, pp.product_presentation_id, pp.updated_at::text AS listing_updated_at, p.url FROM providers_products AS pp JOIN providers AS p ON pp.provider_id = p.id',
     );
     return result.rows.map((row) => ({ ...row, provider_id: parseProviderId(row.provider_id) }));
   } finally {
@@ -59,6 +66,7 @@ export async function getProductsBySSN(ssn: string, providerId?: number): Promis
   product_id: UUID;
   providers_product_id: string;
   product_presentation_id: string;
+  listing_updated_at: string;
   url: string;
 } | null> {
   const client = await pool.connect();
@@ -70,6 +78,7 @@ export async function getProductsBySSN(ssn: string, providerId?: number): Promis
       product_id: UUID;
       providers_product_id: string;
       product_presentation_id: string;
+      listing_updated_at: string;
       url: string;
     }>(
       `
@@ -79,6 +88,7 @@ export async function getProductsBySSN(ssn: string, providerId?: number): Promis
       pp.product_id,
       pp.id AS providers_product_id,
       pp.product_presentation_id,
+      pp.updated_at::text AS listing_updated_at,
       p.url
     FROM providers_products as pp
     JOIN providers as p
@@ -112,6 +122,15 @@ export async function getProviderUrl(provider_id: number): Promise<string | null
     client.release();
   }
 }
+async function lockListing(client: PoolClient, snapshot: ListingSnapshot): Promise<void> {
+  const result = await client.query(
+    `SELECT 1 FROM providers_products
+     WHERE id = $1 AND ssn = $2 AND updated_at = $3::timestamp
+     FOR SHARE`,
+    [snapshot.providers_product_id, snapshot.ssn, snapshot.listing_updated_at],
+  );
+  if (result.rowCount !== 1) throw new Error(`Provider listing changed or was removed during scraping: ${snapshot.providers_product_id}`);
+}
 
 export async function upsertProductPrice(
   input: UpsertPriceInput,
@@ -128,6 +147,7 @@ export async function upsertProductPrice(
 
   try {
     await client.query('BEGIN');
+    await lockListing(client, input);
 
     const result = await client.query(
       `INSERT INTO price_histories (provider_id, product_id, providers_product_id, product_presentation_id, price, currency, updated_at, created_at)
@@ -146,18 +166,18 @@ export async function upsertProductPrice(
   }
 }
 
-export async function createOrKeepOpenScraperIncident(input: {
-  providers_product_id: string;
-}): Promise<boolean> {
+export async function createOrKeepOpenScraperIncident(input: ListingSnapshot): Promise<boolean> {
   const { providers_product_id } = input;
   const client = await pool.connect();
 
   try {
+    await client.query('BEGIN');
+    await lockListing(client, input);
     const result = await client.query<{ id: string }>(
       `INSERT INTO scraper_incidents (provider_id, product_id, providers_product_id, product_presentation_id, status, created_at, updated_at)
        SELECT provider_id, product_id, id, product_presentation_id, 'open', NOW(), NOW()
        FROM providers_products WHERE id = $1 FOR SHARE
-       ON CONFLICT (providers_product_id) WHERE status = 'open' AND providers_product_id IS NOT NULL
+       ON CONFLICT (providers_product_id, product_presentation_id) WHERE status = 'open' AND providers_product_id IS NOT NULL
        DO NOTHING
        RETURNING id;`,
       [providers_product_id],
@@ -167,28 +187,40 @@ export async function createOrKeepOpenScraperIncident(input: {
       const listing = await client.query('SELECT 1 FROM providers_products WHERE id = $1', [providers_product_id]);
       if (listing.rowCount === 0) throw new Error(`Provider listing not found: ${providers_product_id}`);
     }
+    await client.query('COMMIT');
     return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
   } finally {
     client.release();
   }
 }
 
-export async function resolveOpenScraperIncident(input: {
-  providers_product_id: string;
-}): Promise<boolean> {
+export async function resolveOpenScraperIncident(input: ListingSnapshot): Promise<boolean> {
   const { providers_product_id } = input;
   const client = await pool.connect();
 
   try {
+    await client.query('BEGIN');
+    await lockListing(client, input);
     const result = await client.query<{ id: string }>(
-      `UPDATE scraper_incidents
+      `WITH listing AS MATERIALIZED (
+         SELECT product_presentation_id FROM providers_products WHERE id = $1 FOR SHARE
+       )
+       UPDATE scraper_incidents
        SET status = 'resolved', updated_at = NOW()
        WHERE providers_product_id = $1 AND status = 'open'
+         AND product_presentation_id = (SELECT product_presentation_id FROM listing)
        RETURNING id;`,
       [providers_product_id],
     );
 
+    await client.query('COMMIT');
     return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
   } finally {
     client.release();
   }

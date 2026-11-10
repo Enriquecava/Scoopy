@@ -23,8 +23,6 @@ class ProviderListingConcurrencyTest < ActionDispatch::IntegrationTest
         ProvidersProduct.transaction do
           current = ProvidersProduct.lock.find(listing.id)
           current.update!(product_presentation_id: presentation.id)
-          current.price_histories.update_all(product_presentation_id: presentation.id)
-          current.scraper_incidents.update_all(product_presentation_id: presentation.id)
           locked << true
           release.pop
         end
@@ -60,7 +58,7 @@ class ProviderListingConcurrencyTest < ActionDispatch::IntegrationTest
       assert_equal 200, session.response.status
       assert_equal presentation.id, listing.reload.product_presentation_id
       assert_equal "updated-ssn", listing.ssn
-      assert_equal presentation.id, price_histories(:one).reload.product_presentation_id
+      assert_equal original_presentation_id, price_histories(:one).reload.product_presentation_id
     ensure
       release << true if holder.alive?
       holder.join
@@ -68,8 +66,6 @@ class ProviderListingConcurrencyTest < ActionDispatch::IntegrationTest
       ProvidersProduct.transaction do
         current = ProvidersProduct.lock.find(listing.id)
         current.update!(product_presentation_id: original_presentation_id, ssn: original_ssn)
-        current.price_histories.update_all(product_presentation_id: original_presentation_id)
-        current.scraper_incidents.update_all(product_presentation_id: original_presentation_id)
       end
       presentation.destroy!
       measure.destroy!

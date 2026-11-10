@@ -27,9 +27,8 @@ class PriceHistory < ApplicationRecord
       errors.add(:product_presentation, "must belong to the product")
     end
     return unless providers_product
-    return if providers_product.product_id == product_id && providers_product.provider_id == provider_id &&
-      providers_product.product_presentation_id == product_presentation_id
+    return if providers_product.product_id == product_id && providers_product.provider_id == provider_id
 
-    errors.add(:providers_product, "must match the product, provider and presentation")
+    errors.add(:providers_product, "must match the product and provider")
   end
 end

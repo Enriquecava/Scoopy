@@ -28,6 +28,7 @@ export async function scrapeAndStoreProductPrice(
   provider_id: number,
   product_id: UUID,
   providers_product_id: string,
+  listing_updated_at: string,
   url: string,
 ): Promise<number> {
   if (!asin || asin.trim() === '') {
@@ -61,7 +62,7 @@ export async function scrapeAndStoreProductPrice(
       })
       const price = await scraper({ context: context, productId: asin, url: url });
       await context.close();
-      await closeScraperIncident({ provider_id, product_id, providers_product_id, asin });
+      await closeScraperIncident({ provider_id, product_id, providers_product_id, asin, ssn: asin, listing_updated_at });
       return price;
     } catch (error) {
       await context.close();
@@ -77,7 +78,7 @@ export async function scrapeAndStoreProductPrice(
       }, `Provider scraper failed on attempt ${attempt}/${MAX_SCRAPER_RETRIES}`);
 
       if (attempt === MAX_SCRAPER_RETRIES) {
-        await openScraperIncident({ provider_id, product_id, providers_product_id, asin });
+        await openScraperIncident({ provider_id, product_id, providers_product_id, asin, ssn: asin, listing_updated_at });
         throw error;
       }
     }
@@ -118,11 +119,14 @@ async function runFromCli(asin?: string): Promise<void> {
       products.provider_id,
       products.product_id,
       products.providers_product_id,
+      products.listing_updated_at,
       products.url,
     );
     
     await upsertProductPrice({
       providers_product_id: products.providers_product_id,
+      ssn: products.ssn,
+      listing_updated_at: products.listing_updated_at,
       price,
       currency: 'EUR',
     });

@@ -49,15 +49,44 @@ class ProductEnrichmentTest < ActionDispatch::IntegrationTest
     assert_response :conflict
   end
 
-  test "reassigning a listing moves its history and incidents" do
+  test "reassigning a listing preserves its historical prices and incidents" do
     measure = UnitMeasure.create!(name: "ml")
     presentation = @product.product_presentations.create!(unit: Unit.create!(value: 500), unit_measure: measure)
+    original_id = @listing.product_presentation_id
     incident = ScraperIncident.create!(product: @product, provider: @provider, providers_product: @listing)
     patch "/products/#{@product.id}/provider_listings/#{@listing.id}", params: { listing: { product_presentation_id: presentation.id } }, headers: @admin_headers, as: :json
     assert_response :success
     assert_equal presentation.id, @listing.reload.product_presentation_id
-    assert_equal presentation.id, price_histories(:one).reload.product_presentation_id
-    assert_equal presentation.id, incident.reload.product_presentation_id
+    assert_equal original_id, price_histories(:one).reload.product_presentation_id
+    assert_equal original_id, incident.reload.product_presentation_id
+    assert incident.open?
+  end
+
+  test "editing a presentation creates another and moves only selected listings" do
+    measure = UnitMeasure.create!(name: "packs")
+    original = @product.product_presentations.create!(unit: Unit.create!(value: 60), unit_measure: measure)
+    first = @product.providers_products.create!(provider: @provider, ssn: "packs-first", product_presentation: original)
+    second = @product.providers_products.create!(provider: @provider, ssn: "packs-second", product_presentation: original)
+    price = PriceHistory.create!(product: @product, provider: @provider, providers_product: first, price: 10, currency: "EUR")
+    incident = ScraperIncident.create!(product: @product, provider: @provider, providers_product: first)
+
+    patch "/products/#{@product.id}/presentations/#{original.id}", params: { presentation: { value: 120, unit_measure_id: measure.id } }, headers: @admin_headers, as: :json
+    assert_response :created
+    new_id = response.parsed_body.fetch("id")
+    assert_not_equal original.id, new_id
+    assert_equal 60, original.reload.unit.value
+
+    patch "/products/#{@product.id}/provider_listings/#{first.id}", params: { listing: { product_presentation_id: new_id } }, headers: @admin_headers, as: :json
+    assert_response :success
+    assert_equal new_id, first.reload.product_presentation_id
+    assert_equal original.id, second.reload.product_presentation_id
+    assert_equal original.id, price.reload.product_presentation_id
+    assert_equal original.id, incident.reload.product_presentation_id
+    assert incident.open?
+    new_price = PriceHistory.create!(product: @product, provider: @provider, providers_product: first, price: 20, currency: "EUR")
+    assert_equal new_id, new_price.product_presentation_id
+    delete "/products/#{@product.id}/presentations/#{original.id}", headers: @admin_headers, as: :json
+    assert_response :conflict
   end
 
   test "SSN-only and unchanged presentation updates do not rewrite history" do
@@ -109,7 +138,7 @@ class ProductEnrichmentTest < ActionDispatch::IntegrationTest
     post "/products/#{product.id}/provider_listings", params: { listing: { provider_id: @provider.id, ssn: "default-listing" } }, headers: @admin_headers, as: :json
     assert_response :created
     recreated = product.default_presentation
-    assert_not_equal default.id, recreated.id
+    assert_equal default.id, recreated.id
     assert_equal recreated.id, response.parsed_body.fetch("product_presentation_id")
 
     product_without_listing = Product.create!(name: "Orphan product")

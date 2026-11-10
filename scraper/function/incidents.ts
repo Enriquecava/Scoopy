@@ -1,8 +1,8 @@
 import { UUID } from 'crypto';
-import { createOrKeepOpenScraperIncident, resolveOpenScraperIncident } from './postgres';
+import { createOrKeepOpenScraperIncident, resolveOpenScraperIncident, ListingSnapshot } from './postgres';
 import { LOG_EVENT, logger } from '../utils/logger';
 
-export async function openScraperIncident(input: {
+export async function openScraperIncident(input: ListingSnapshot & {
   provider_id: number;
   product_id: UUID;
   providers_product_id: string;
@@ -10,7 +10,7 @@ export async function openScraperIncident(input: {
 }): Promise<boolean> {
   const { provider_id, product_id, providers_product_id, asin } = input;
 
-  const created = await createOrKeepOpenScraperIncident({ providers_product_id });
+  const created = await createOrKeepOpenScraperIncident(input);
 
   if (created) {
     logger.warn({
@@ -31,7 +31,7 @@ export async function openScraperIncident(input: {
   return created;
 }
 
-export async function closeScraperIncident(input: {
+export async function closeScraperIncident(input: ListingSnapshot & {
   provider_id: number;
   product_id: UUID;
   providers_product_id: string;
@@ -39,7 +39,7 @@ export async function closeScraperIncident(input: {
 }): Promise<boolean> {
   const { provider_id, product_id, providers_product_id, asin } = input;
 
-  const resolved = await resolveOpenScraperIncident({ providers_product_id });
+  const resolved = await resolveOpenScraperIncident(input);
 
   if (resolved) {
     logger.info({

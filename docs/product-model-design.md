@@ -9,14 +9,17 @@ quantity (stored in `units`) and a measurement (`unit_measures`), or neither
 when the quantity is unknown. Quantities are not inferred from product names.
 Administrators manage presentations and provider listings from product detail.
 A presentation with listings, prices or incidents cannot be deleted.
-If the unknown-quantity presentation is edited or deleted, it is recreated
+If the unknown-quantity presentation is deleted, it is recreated
 when a new listing or legacy record needs a default presentation.
 
 Each provider listing has a stable ID and belongs to a presentation. The
 provider and SSN combination is unique, but a provider can have several
 listings for the same product. Prices and incidents record both the listing and
-the presentation. When an administrator moves a listing to another
-presentation, its prices and incidents are moved with it.
+the presentation. Editing a presentation creates a new presentation, leaving
+the original unchanged. Administrators can move each listing separately;
+existing prices and incidents remain associated with their original presentation.
+Open incidents remain open for their original presentation and can be resolved
+by the scraper if the listing returns to that presentation.
 
 ## Migration and legacy data
 
@@ -41,7 +44,8 @@ required presentation ID.
 - `POST /products/:product_id/presentations` and `PATCH` or `DELETE` on
   `/products/:product_id/presentations/:id`: admin presentation management.
   Supply `{ "presentation": { "value": 120, "unit_measure_id": 1 } }`, or
-  set both fields to null for an unknown quantity.
+  set both fields to null for an unknown quantity. A PATCH creates a new
+  presentation and returns it with HTTP 201; it never changes the original.
 - `POST /products/:product_id/provider_listings` and `PATCH` on
   `/products/:product_id/provider_listings/:id`: admin listing management.
 - `POST /products/:product_id/provider_listings/:id/legacy/:record_type/:record_id`

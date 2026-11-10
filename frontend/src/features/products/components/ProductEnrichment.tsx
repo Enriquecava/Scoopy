@@ -108,6 +108,7 @@ export function ProductEnrichment({ product, onChanged }: { product: Product; on
         <button disabled={busy} className={inputClass}>{t('products.enrichment.save')}</button>
       </form>
 
+      <p className="text-slate-400">{t('products.enrichment.presentationEditHint')}</p>
       <form className="flex flex-wrap items-end gap-3" onSubmit={savePresentation}>
         <label>{t('products.enrichment.presentation')}<select className={`ml-2 ${inputClass}`} value={presentationId} onChange={(event) => selectPresentation(event.target.value)}><option value="">{t('products.enrichment.newPresentation')}</option>{product.presentations.map((item) => <option key={item.id} value={item.id}>{item.unit && item.unit_measure ? `${item.unit.value} ${item.unit_measure.name}` : t('products.enrichment.unknown')}</option>)}</select></label>
         <label>{t('products.enrichment.quantity')}<input className={`ml-2 w-24 ${inputClass}`} type="number" min="0.0001" step="0.0001" value={value} onChange={(event) => setValue(event.target.value)} /></label>

@@ -11,7 +11,7 @@ let context: BrowserContext;
 before(async () => { browser = await chromium.launch({ headless: true }); });
 after(async () => { await context?.close(); await browser?.close(); });
 
-async function openProduct(role: 'user' | 'admin', emptyAfterDelete = false) {
+async function openProduct(role: 'user' | 'admin', emptyAfterDelete = false, movedListing = false) {
   let deleted = false;
   let submittedListing: Record<string, unknown> | undefined;
   context = await browser.newContext({ viewport: { width: 375, height: 812 } });
@@ -48,6 +48,10 @@ async function openProduct(role: 'user' | 'admin', emptyAfterDelete = false) {
       product.presentations = deleted ? [] : product.presentations.slice(0, 1);
       product.providers_products = [];
     }
+    if (movedListing) {
+      product.providers_products[0].product_presentation_id = 2;
+      product.providers_products = product.providers_products.slice(0, 1);
+    }
     const history = {
       price_history: [
         { id: 1, price: '5', currency: 'EUR', created_at: '2026-01-01T00:00:00Z', provider_name: 'Amazon', provider_id: 1, providers_product_id: 11, product_presentation_id: 1 },
@@ -56,6 +60,7 @@ async function openProduct(role: 'user' | 'admin', emptyAfterDelete = false) {
     };
     const data = path === '/products/example' ? product
       : path.endsWith('/price_history') ? history
+        : movedListing && path.endsWith('/incidents') ? [{ provider_id: 1, provider_name: 'Amazon', providers_product_id: 11, product_presentation_id: 1, created_at: '2026-01-01T00:00:00Z' }]
         : path === '/providers' ? { data: [{ id: 1, name: 'Amazon' }] }
           : [];
     await route.fulfill({
@@ -64,7 +69,8 @@ async function openProduct(role: 'user' | 'admin', emptyAfterDelete = false) {
     });
   });
   await page.goto(`${baseUrl}/products/example`);
-  if (!emptyAfterDelete) await page.getByText('SSN: FIRST').waitFor();
+  if (!emptyAfterDelete && !movedListing) await page.getByText('SSN: FIRST').waitFor();
+  else if (movedListing) await page.getByText('Dodot').first().waitFor();
   else await page.getByRole('button', { name: 'Añadir anuncio' }).waitFor();
   return { page, submittedListing: () => submittedListing };
 }
@@ -77,6 +83,17 @@ test('regular users see only the selected presentation and cannot edit', async (
   assert.equal(await page.getByText('SSN: FIRST').count(), 0);
   assert.equal(await page.getByText('SSN: SECOND').count(), 1);
   assert.match(await page.locator('article').innerText(), /10,00/);
+  await context.close();
+});
+
+test('moving a listing leaves its old price on the original presentation and does not apply its old incident', async () => {
+  const { page } = await openProduct('user', false, true);
+  assert.equal(await page.locator('svg circle').count(), 1);
+  assert.equal(await page.getByText('Incidencias abiertas de anuncios que ya no están en esta presentación').count(), 1);
+  await page.getByLabel('Presentación').selectOption('2');
+  await page.getByText('SSN: FIRST').waitFor();
+  assert.equal(await page.locator('article').getByText('Activo', { exact: true }).count(), 1);
+  assert.equal(await page.getByText('Incidencias abiertas de anuncios que ya no están en esta presentación').count(), 0);
   await context.close();
 });
 

@@ -447,7 +447,7 @@ export function ProductDetailPage() {
                       const providerKey = providerProductKey(provider, index)
                       const providerName = provider.provider_name ?? t('products.detail.provider')
                       const incident = scraperIncidents.find(
-                        (item) => item.providers_product_id === provider.id,
+                        (item) => item.providers_product_id === provider.id && item.product_presentation_id === selectedPresentation,
                       )
                       const latestPrice = latestPriceByProvider.get(String(provider.id))
                       const numericPrice = latestPrice ? Number.parseFloat(String(latestPrice.price)) : Number.NaN
@@ -511,6 +511,19 @@ export function ProductDetailPage() {
                 ))}
               </select>
             </label>
+            {scraperIncidents.some((incident) => incident.product_presentation_id === selectedPresentation &&
+              !(product.providers_products ?? []).some((listing) => listing.id === incident.providers_product_id && listing.product_presentation_id === selectedPresentation)) ? (
+              <div className="mt-4 text-sm text-rose-300">
+                <p>{t('products.enrichment.previousIncidents')}</p>
+                <ul>
+                  {scraperIncidents.filter((incident) => incident.product_presentation_id === selectedPresentation &&
+                    !(product.providers_products ?? []).some((listing) => listing.id === incident.providers_product_id && listing.product_presentation_id === selectedPresentation))
+                    .map((incident) => <li key={`${incident.provider_id}-${incident.providers_product_id}-${incident.created_at}`}>
+                      {incident.provider_name ?? t('products.detail.provider')} · {formatDate(incident.created_at, locale)}
+                    </li>)}
+                </ul>
+              </div>
+            ) : null}
             {role === 'admin' ? <ProductEnrichment product={product} onChanged={() => window.location.reload()} /> : null}
           </section>
 

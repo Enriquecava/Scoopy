@@ -9,8 +9,8 @@ class ProductPresentationsController < ApplicationController
   end
 
   def update
-    presentation = @product.product_presentations.find(params[:id])
-    save_presentation(presentation)
+    @product.product_presentations.find(params[:id])
+    save_presentation(@product.product_presentations.new)
   end
 
   def destroy

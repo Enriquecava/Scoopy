@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_09_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_10_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -124,6 +124,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_000000) do
     t.string "ssn", null: false
     t.datetime "updated_at", null: false
     t.index ["id", "product_id", "provider_id", "product_presentation_id"], name: "index_provider_listings_on_full_context", unique: true
+    t.index ["id", "product_id", "provider_id"], name: "index_provider_listings_on_identity", unique: true
     t.index ["product_id"], name: "index_providers_products_on_product_id"
     t.index ["product_presentation_id"], name: "index_providers_products_on_product_presentation_id"
     t.index ["provider_id", "ssn"], name: "index_providers_products_on_provider_id_and_ssn", unique: true
@@ -142,7 +143,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_000000) do
     t.index ["product_presentation_id"], name: "index_scraper_incidents_on_product_presentation_id"
     t.index ["provider_id", "product_presentation_id"], name: "index_scraper_incidents_on_open_legacy", unique: true, where: "(((status)::text = 'open'::text) AND (providers_product_id IS NULL))"
     t.index ["provider_id"], name: "index_scraper_incidents_on_provider_id"
-    t.index ["providers_product_id"], name: "index_scraper_incidents_on_open_listing", unique: true, where: "(((status)::text = 'open'::text) AND (providers_product_id IS NOT NULL))"
+    t.index ["providers_product_id", "product_presentation_id"], name: "index_scraper_incidents_on_open_listing_presentation", unique: true, where: "(((status)::text = 'open'::text) AND (providers_product_id IS NOT NULL))"
     t.index ["providers_product_id"], name: "index_scraper_incidents_on_providers_product_id"
     t.check_constraint "status::text = ANY (ARRAY['open'::character varying::text, 'resolved'::character varying::text])", name: "scraper_incidents_status_check"
   end
@@ -181,7 +182,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_000000) do
   add_foreign_key "price_histories", "products"
   add_foreign_key "price_histories", "providers"
   add_foreign_key "price_histories", "providers_products"
-  add_foreign_key "price_histories", "providers_products", column: ["providers_product_id", "product_id", "provider_id", "product_presentation_id"], primary_key: ["id", "product_id", "provider_id", "product_presentation_id"], name: "price_histories_listing_context_fk", deferrable: :deferred
+  add_foreign_key "price_histories", "providers_products", column: ["providers_product_id", "product_id", "provider_id"], primary_key: ["id", "product_id", "provider_id"], name: "price_histories_listing_identity_fk"
   add_foreign_key "product_presentations", "products"
   add_foreign_key "product_presentations", "unit_measures"
   add_foreign_key "product_presentations", "units"
@@ -198,5 +199,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_09_000000) do
   add_foreign_key "scraper_incidents", "products"
   add_foreign_key "scraper_incidents", "providers"
   add_foreign_key "scraper_incidents", "providers_products"
-  add_foreign_key "scraper_incidents", "providers_products", column: ["providers_product_id", "product_id", "provider_id", "product_presentation_id"], primary_key: ["id", "product_id", "provider_id", "product_presentation_id"], name: "scraper_incidents_listing_context_fk", deferrable: :deferred
+  add_foreign_key "scraper_incidents", "providers_products", column: ["providers_product_id", "product_id", "provider_id"], primary_key: ["id", "product_id", "provider_id"], name: "scraper_incidents_listing_identity_fk"
 end
