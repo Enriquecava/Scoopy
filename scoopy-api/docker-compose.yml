@@ -1,5 +1,6 @@
 services:
   api:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile
@@ -9,6 +10,11 @@ services:
         - linux/amd64
     image: scoopy-api
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - ../.env
     environment:
@@ -31,6 +37,12 @@ services:
     depends_on:
       verifier:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
     networks:
       - tunnel
       - backend
@@ -39,6 +51,7 @@ services:
     #   - "${API_PORT:-3000}:3000"
 
   scraper:
+    platform: linux/amd64
     build:
       context: ../scraper
       dockerfile: Dockerfile
@@ -46,6 +59,14 @@ services:
         - linux/amd64
     image: scoopy-scraper
     restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # Explicit allowlist instead of env_file: ../.env, so this browser-facing
@@ -56,7 +77,6 @@ services:
       PGUSER: ${PGUSER:?Set PGUSER in the Scoopy .env file}
       PGPASSWORD: ${PGPASSWORD:?Set PGPASSWORD in the Scoopy .env file}
       PGDATABASE: ${PGDATABASE:?Set PGDATABASE in the Scoopy .env file}
-      SCRAPER_LOG_FILE: ${SCRAPER_LOG_FILE}
       SCRAPER_BATCH_DELAY_MS: ${SCRAPER_BATCH_DELAY_MS:-3000}
       SCRAPER_BATCH_INTERVAL_SECONDS: ${SCRAPER_BATCH_INTERVAL_SECONDS:-14400}
       PLAYWRIGHTHEADLESS: ${PLAYWRIGHTHEADLESS:-True}
@@ -64,6 +84,7 @@ services:
   # Runs scraper/function/verifier.ts as an HTTP service so the API can request
   # product verification screenshots without needing Node.js in its own image.
   verifier:
+    platform: linux/amd64
     build:
       context: ../scraper
       dockerfile: Dockerfile
@@ -71,7 +92,12 @@ services:
         - linux/amd64
     image: scoopy-scraper
     restart: unless-stopped
-    command: ["./docker/with-xvfb.sh", "node", "dist/function/verifierServer.js"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: ["./docker/start-verifier.sh"]
     # Explicit allowlist instead of env_file: ../.env, so this browser-facing
     # container never receives RAILS_MASTER_KEY or other API-only secrets.
     environment:
@@ -81,7 +107,6 @@ services:
       PGPASSWORD: ${PGPASSWORD:?Set PGPASSWORD in the Scoopy .env file}
       PGDATABASE: ${PGDATABASE:?Set PGDATABASE in the Scoopy .env file}
       VERIFIER_PORT: 4000
-      SCRAPER_LOG_FILE: ${SCRAPER_LOG_FILE}
       VERIFIER_TIMEOUT_MS: ${VERIFIER_TIMEOUT_MS:-25000}
       SCREENSHOT_DIR: /app/tmp/screenshot
     volumes:

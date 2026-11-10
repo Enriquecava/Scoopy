@@ -18,4 +18,8 @@ export const admin = {
   updateError: 'No se pudo actualizar el producto.',
   deleteError: 'No se pudo eliminar el producto.',
   cancel: 'Cancelar',
+  brands: 'Marcas',
+  categories: 'Categorías',
+  measures: 'Unidades de medida',
+  catalogDeleteConfirm: '¿Eliminar este elemento del catálogo? No se puede eliminar si está en uso.',
 } as const

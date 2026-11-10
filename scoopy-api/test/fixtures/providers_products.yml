@@ -1,9 +1,11 @@
 one:
   product: one
+  product_presentation: one
   provider: one
   ssn: 12345
 
 two:
   product: two
+  product_presentation: two
   provider: two
   ssn: 67890
