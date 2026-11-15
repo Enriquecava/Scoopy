@@ -105,6 +105,32 @@ flowchart LR
     D --> E[Frontend]
     E --> F[Users]
 ```
+## Docker scripts
+
+```bash
+cd ../Scoopy
+source .env
+```
+
+Scoopy Api
+```bash
+docker run -d   --name scoopy-api   --network scoopy_backend   --add-host=host.docker.internal:host-gateway   -p 3000:3000   -e PGHOST=host.docker.internal   -e PGPORT=$PGPORT   -e PGUSER=$PGUSER   -e PGPASSWORD=$PGPASSWORD   -e PGDATABASE=$PGDATABASE   -e RAILS_ENV=production   -e RAILS_MASTER_KEY=$(cat scoopy-api/config/master.key)   -e CORS_ALLOWED_ORIGINS=$CORS_ALLOWED_ORIGINS   -e SCRAPER_VERIFIER_URL=$SCRAPER_VERIFIER_URL   -e SOLID_QUEUE_IN_PUMA=$SOLID_QUEUE_IN_PUMA   -e SCREENSHOT_DIRECTORY=$SCREENSHOT_DIRECTORY   -v scoopy_screenshots:/rails/tmp/screenshot   -v scoopy_api_logs:/rails/log   scoopy-api:latest
+```
+
+Scoopy Verifier
+```bash
+docker run -d   --name scoopy-verifier   --network scoopy_backend   --add-host=host.docker.internal:host-gateway   -p 4000:4000   -e PLAYWRIGHTHEADLESS=False   -e PGHOST=$PGHOST   -e PGPORT=$PGPORT   -e PGUSER=$PGUSER   -e PGPASSWORD=$PGPASSWORD   -e VERIFIER_TIMEOUT_MS=$VERIFIER_TIMEOUT_MS   -e PGDATABASE=$PGDATABASE   -e SCREENSHOT_DIR=/app/tmp/screenshot   -v scoopy_screenshots:/app/tmp/screenshot   -v scoopy_scraper_logs:/app/logs   scoopy-verifier:latest   ./docker/start-verifier.sh
+```
+
+Scoopy Scraper
+```bash
+docker run -d   --name scoopy-scraper   --network scoopy_backend   --add-host=host.docker.internal:host-gateway   -e API_URL=http://scoopy-api:3000   -e VERIFIER_URL=http://scoopy-verifier:4000   -e SCRAPER_BATCH_DELAY_MS=3000   -e PLAYWRIGHTHEADLESS=True   -e PGHOST=host.docker.internal   -e PGPORT=$PGPORT   -e PGUSER=$PGUSER   -e PGPASSWORD=$PGPASSWORD   -e PGDATABASE=$PGDATABASE   -v scoopy_screenshots:/app/screenshots   -v scoopy_scraper_logs:/app/logs   scoopy-scraper:latest
+```
+Scoopy Frontend
+```bash
+docker run -d   --name scoopy-frontend   --network scoopy_backend   -p 80:80   -p 443:443   -e VITE_API_URL=$VITE_API_URL   scoopy-frontend:latest
+```
+
 
 ## Documentation
 
