@@ -11,7 +11,12 @@ export class CookiesPage {
   }
   
   async clickAcceptButton(){
-    await this.acceptButton.click();
+    await this.acceptButton.waitFor({ state: 'visible', timeout: 5000 })
+    .catch(() => {});
+
+    if (await this.acceptButton.isVisible()) {
+        await this.acceptButton.click();
+    }
   }
 
 }
